@@ -1,0 +1,3 @@
+[submodule "vendor/whiteboard-animator"]
+	path = vendor/whiteboard-animator
+	url = https://github.com/masihsultani/whiteboard-animator

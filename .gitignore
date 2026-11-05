@@ -1,0 +1,29 @@
+# env
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# node
+node_modules/
+remotion/out/
+remotion/public/jobs/
+
+# pipeline outputs
+jobs/*
+!jobs/.gitkeep
+
+# temp
+*.aiff
+
+# os / editor
+.DS_Store
+.vscode/
+.idea/
