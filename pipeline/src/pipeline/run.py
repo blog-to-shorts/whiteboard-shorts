@@ -1,74 +1,98 @@
-"""파이프라인 진입점.
+"""파이프라인 오케스트레이터.
 
-python -m pipeline.run --url URL
-python -m pipeline.run --text-file FILE
-python -m pipeline.run --job-id ID --from-step 4
+사용 예)
+  python -m pipeline.run --url "https://blog.naver.com/..."            # 새 job 생성
+  python -m pipeline.run --text-file 원문.txt                           # 원문 직접 입력
+  python -m pipeline.run --job test01                                   # 기존 job 이어서 실행
+
+각 단계는 결과 파일이 이미 있으면 건너뛰므로, 중간에 실패해도 같은 job으로 다시 실행하면
+실패한 단계부터 이어서 진행된다. 단계별 소요 시간·사용량·오류는 jobs/{id}/log.json에 남는다.
 """
 import argparse
 import time
-import uuid
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
-from pipeline.config import job_dir
-from pipeline.schema import Project
-from pipeline.steps import (
-    s01_extract, s02_analyze, s03_script, s04_image,
-    s05_tts, s06_animate, s07_subtitle, s08_render,
-)
-from pipeline.utils.logger import JobLogger
-
-# s01은 원문 텍스트를 만들고, s02부터는 scenes.json(Project)을 읽고 갱신한다.
-STEPS = {
-    2: s02_analyze.run,
-    3: s03_script.run,
-    4: s04_image.run,
-    5: s05_tts.run,
-    6: s06_animate.run,
-    7: s07_subtitle.run,
-    8: s08_render.run,
-}
+from .config import settings
+from .schema import Project
+from .steps import s01_extract, s02_analyze, s03_script, s04_image, s05_tts
+from .utils.logger import JobLogger, log
 
 
-def run(url: str | None = None, text: str | None = None,
-        job_id: str | None = None, from_step: int = 1) -> Path:
-    job_id = job_id or time.strftime("%Y%m%d-%H%M%S-") + uuid.uuid4().hex[:6]
-    d = job_dir(job_id)
-    log = JobLogger(d)
-    scenes_path = d / "scenes.json"
+def new_job_id() -> str:
+    return datetime.now().strftime("%Y%m%d-%H%M%S")
 
-    if from_step <= 1:
-        with log.step("s01_extract"):
-            source = text if text is not None else s01_extract.run(url)
-            (d / "source.txt").write_text(source, encoding="utf-8")
 
-    source = (d / "source.txt").read_text(encoding="utf-8")
-    project = Project.load(scenes_path) if scenes_path.exists() else Project(title="")
+def _timed(fn, *args):
+    """병렬 실행용: (결과, 소요 시간)"""
+    t0 = time.time()
+    result = fn(*args)
+    return result, round(time.time() - t0, 2)
 
-    for no, fn in STEPS.items():
-        if no < from_step:
-            continue
-        with log.step(fn.__module__.split(".")[-1]):
-            project = fn(project, job_dir=d, source=source)
-            project.save(scenes_path)
 
-    log.save()
-    return d / "final.mp4"
+def run(
+        job_id: Optional[str] = None,
+        url: Optional[str] = None,
+        text: Optional[str] = None,
+) -> Path:
+    job_id = job_id or new_job_id()
+    job_dir = settings.jobs_dir / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+    jl = JobLogger(job_dir)
+    jl.data.update({"job_id": job_id, "source_url": url, "started_at": datetime.now().isoformat()})
+    log.info(f"===== job {job_id} 시작 → {job_dir} =====")
+    t_start = time.time()
+
+    try:
+        with jl.step("s01_extract") as e:
+            ext = s01_extract.run(job_dir, url=url, text=text)
+            e["chars"] = len(ext.text)
+
+        with jl.step("s02_analyze") as e:
+            _, usage = s02_analyze.run(job_dir)
+            e.update(usage)
+
+        with jl.step("s03_script") as e:
+            project, usage = s03_script.run(job_dir, source_url=url)
+            e.update(usage)
+            e["scenes"] = len(project.scenes)
+
+        # 이미지와 음성은 서로 독립적이므로 동시에 실행 (기획안 2장 설계 포인트)
+        with jl.step("s04_image+s05_tts") as e:
+            with ThreadPoolExecutor(max_workers=2) as ex:
+                f_img = ex.submit(_timed, s04_image.run, job_dir)
+                f_tts = ex.submit(_timed, s05_tts.run, job_dir)
+                img_usage, img_sec = f_img.result()
+                tts_usage, tts_sec = f_tts.result()
+            e["image"] = {**img_usage, "seconds": img_sec}
+            e["tts"] = {**tts_usage, "seconds": tts_sec}
+
+    finally:
+        jl.data["total_seconds"] = round(time.time() - t_start, 2)
+        jl.save()
+
+    project = Project.load(job_dir / "scenes.json")
+    log.info(
+        f"===== job {job_id} 완료: 장면 {len(project.scenes)}개, "
+        f"음성 총 {project.total_duration:.1f}초, 처리 {jl.data['total_seconds']}초 ====="
+    )
+    return job_dir
 
 
 def main() -> None:
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(description="블로그 → 화이트보드 숏폼 파이프라인")
     src = p.add_mutually_exclusive_group()
-    src.add_argument("--url")
-    src.add_argument("--text-file")
-    p.add_argument("--job-id")
-    p.add_argument("--from-step", type=int, default=1)
+    src.add_argument("--url", help="블로그 글 URL")
+    src.add_argument("--text-file", type=Path, help="원문 텍스트 파일 (URL 추출 실패 시)")
+    p.add_argument("--job", help="job ID (생략 시 현재 시각으로 새로 생성)")
     a = p.parse_args()
 
-    text = Path(a.text_file).read_text(encoding="utf-8") if a.text_file else None
-    if not (a.url or text or a.job_id):
-        p.error("--url, --text-file, --job-id 중 하나가 필요합니다")
-    out = run(url=a.url, text=text, job_id=a.job_id, from_step=a.from_step)
-    print(f"done: {out}")
+    if not (a.url or a.text_file or a.job):
+        p.error("--url, --text-file, --job 중 하나는 필요합니다")
+    text = a.text_file.read_text(encoding="utf-8") if a.text_file else None
+    run(job_id=a.job, url=a.url, text=text)
 
 
 if __name__ == "__main__":
