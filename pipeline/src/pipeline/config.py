@@ -59,6 +59,9 @@ class Settings:
     animate_quality: str = os.getenv("ANIMATE_QUALITY", "high")  # low | medium | high
     animate_workers: int = 2  # CPU 작업이라 동시 실행은 2개 정도가 적당
 
+    # 드로잉 순서: GPT가 그림을 보고 "무엇부터 그릴지"를 정한다. 0이면 기본(위→아래) 순서
+    draw_order: bool = os.getenv("DRAW_ORDER", "1") != "0"
+
     # 최종 렌더 (Remotion)
     remotion_browser: str = os.getenv("REMOTION_BROWSER", "")  # 비워 두면 Remotion 기본 Chrome 사용
 

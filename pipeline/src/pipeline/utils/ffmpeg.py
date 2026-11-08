@@ -4,7 +4,7 @@ from pathlib import Path
 
 
 def run(args: list[str]) -> None:
-    """ffmpeg 실행. 실패하면 오류 메시지를 담아 예외."""
+    """ffmpeg 실행. 실패하면 stderr를 담아 예외."""
     proc = subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args],
                           capture_output=True, text=True)
     if proc.returncode != 0:
@@ -21,15 +21,22 @@ def probe_duration(path: Path) -> float:
     return round(float(out.stdout.strip()), 3)
 
 
-def to_wav(src: Path, dst: Path, sample_rate: int = 44100, pad_end: float = 0.3) -> Path:
-    """mp3 → mono wav. 장면 전환 시 숨 쉴 틈을 주기 위해 끝에 짧은 무음을 붙인다."""
-    run(["-i", str(src), "-af", f"apad=pad_dur={pad_end}",
-         "-ac", "1", "-ar", str(sample_rate), str(dst)])
-    return dst
+# TTS가 앞뒤에 붙이는 무음 길이가 장면마다 달라서(0.1~0.6초) 장면 사이 간격이 들쭉날쭉해진다.
+# 앞뒤 무음을 잘라낸 뒤 모든 장면에 같은 길이의 무음을 다시 붙인다.
+SILENCE_DB = "-45dB"  # 이보다 작은 소리는 무음으로 본다
+TAIL_SILENCE_DB = "-33dB" # 끝부분: 숨소리(습~ 흡~)까지 무음으로 보고 잘라낸다
+LEAD_SEC = 0.05        # 장면 시작 전 무음
+TAIL_SEC = 0.25        # 장면 끝 무음 (다음 장면까지 숨 쉬는 간격)
 
 
-def to_h264(src: Path, dst: Path) -> Path:
-    """Remotion 호환용 H.264 변환 (STEP 07에서 사용)."""
-    run(["-i", str(src), "-c:v", "libx264", "-preset", "veryfast",
-         "-pix_fmt", "yuv420p", str(dst)])
+def to_wav(src: Path, dst: Path, sample_rate: int = 44100,
+           lead: float = LEAD_SEC, tail: float = TAIL_SEC) -> Path:
+    """mp3 → mono wav. 앞뒤 무음을 잘라내고 일정한 길이의 무음을 다시 붙인다."""
+    trim = f"silenceremove=start_periods=1:start_threshold={SILENCE_DB}:start_silence=0.02"
+    af = ",".join([
+        trim, "areverse", trim, "areverse",          # 앞 무음 제거 → 뒤집어서 뒤 무음 제거
+        f"adelay={int(lead * 1000)}:all=1",           # 앞 무음 붙이기
+        f"apad=pad_dur={tail}",                       # 뒤 무음 붙이기
+    ])
+    run(["-i", str(src), "-af", af, "-ac", "1", "-ar", str(sample_rate), str(dst)])
     return dst

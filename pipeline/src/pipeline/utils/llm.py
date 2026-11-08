@@ -1,6 +1,8 @@
 """OpenAI 텍스트 호출 공통 유틸 (구조화 출력)."""
+import base64
 from functools import lru_cache
 from pathlib import Path
+from typing import Optional
 
 from openai import OpenAI
 
@@ -22,15 +24,22 @@ def load_prompt(name: str, **kwargs) -> str:
     return text.format(**kwargs) if kwargs else text
 
 
-def parse(system: str, user: str, model_cls):
+def _image_part(path: Path) -> dict:
+    data = base64.b64encode(path.read_bytes()).decode()
+    return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data}", "detail": "low"}}
+
+
+def parse(system: str, user: str, model_cls, image: Optional[Path] = None):
     """Pydantic 모델 형식으로만 답하도록 강제해서 호출.
     GPT-5 계열은 temperature 등을 받지 않으므로 넘기지 않는다.
+    image를 주면 그림을 함께 보내 그림을 보고 답하게 한다.
     반환: (파싱된 객체, 토큰 사용량 dict)
     """
     resp = client().chat.completions.parse(
         model=settings.text_model,
         messages=[{"role": "system", "content": system},
-                  {"role": "user", "content": user}],
+                  {"role": "user", "content": [{"type": "text", "text": user}, _image_part(image)]
+                  if image else user}],
         response_format=model_cls,
     )
     msg = resp.choices[0].message
