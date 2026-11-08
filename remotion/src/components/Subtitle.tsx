@@ -17,10 +17,10 @@ export const Subtitle: React.FC<{ cues: Cue[] }> = ({ cues }) => {
     const lift = interpolate(since, [0, 0.15], [12, 0], { extrapolateRight: "clamp" });
 
     return (
-        <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: 110 }}>
+        <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: 80 }}>
             <div
                 style={{
-                    maxWidth: 960,
+                    maxWidth: 1000,
                     padding: "0 20px",
                     color: "#111",
                     fontFamily: "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif",
@@ -29,6 +29,7 @@ export const Subtitle: React.FC<{ cues: Cue[] }> = ({ cues }) => {
                     lineHeight: 1.35,
                     textAlign: "center",
                     wordBreak: "keep-all",
+                    whiteSpace: "pre-line", // 자막에 넣은 줄바꿈(\n)을 그대로 표시
                     opacity,
                     transform: `translateY(${lift}px)`,
                 }}

@@ -7,6 +7,7 @@ from ..schema import Project, Scene
 from ..tts import synthesize
 from ..utils.ffmpeg import probe_duration, to_wav
 from ..utils.logger import log
+from ..utils.pronounce import to_speech
 
 # ElevenLabs 무료·저가 플랜은 동시 요청 수 제한이 낮아서 2개까지만
 MAX_WORKERS = 2
@@ -19,7 +20,9 @@ def _one(job_dir: Path, scene: Scene, prev_text: str, next_text: str) -> tuple[i
         return scene.id, 0
     wav.parent.mkdir(parents=True, exist_ok=True)
     mp3 = wav.with_suffix(".mp3")
-    synthesize(scene.narration, mp3, prev_text=prev_text, next_text=next_text)
+    # 영문 약어는 정해진 발음으로 바꿔서 읽힌다 (자막은 원래 표기 유지)
+    synthesize(to_speech(scene.narration), mp3,
+               prev_text=to_speech(prev_text), next_text=to_speech(next_text))
     to_wav(mp3, wav)
     mp3.unlink(missing_ok=True)
     log.info(f"[s05] scene {scene.id:02d} 음성 저장")
@@ -46,6 +49,7 @@ def run(job_dir: Path, only: list[int] | None = None) -> dict:
         results = list(ex.map(lambda s: _one(job_dir, s, *neighbors(s)), targets))
     chars = sum(c for _, c in results)
 
+    # 실제 음성 길이를 duration에 기록 (자막·드로잉·렌더가 모두 이 값을 기준으로 맞춰진다)
     # 아직 음성이 없는 장면(일부만 생성한 경우)은 None으로 둔다
     for s in scenes:
         wav = job_dir / s.audio

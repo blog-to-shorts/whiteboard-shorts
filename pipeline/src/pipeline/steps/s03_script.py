@@ -1,4 +1,10 @@
-"""STEP 03. 대본·장면 생성: analysis.json + source.txt → scenes.json."""
+"""STEP 03. 대본·장면 생성: analysis.json + source.txt → scenes.json.
+
+생성 결과를 코드로 검사하고, 규칙을 어기면 무엇이 틀렸는지 알려 주며 다시 요청한다.
+  - 장면 수, 장면별·전체 글자 수 (→ 영상 길이 30~60초)
+  - 핵심 포인트 누락 여부 (→ 원문 핵심 정보 누락 자동 검증)
+"""
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -8,30 +14,58 @@ from ..utils.llm import load_prompt, parse
 from ..utils.logger import log
 
 MAX_ATTEMPTS = 2  # 규칙 위반 시 피드백을 붙여 1회 재요청
+# TTS가 어색하게 읽을 수 있는 문자: 숫자, %, ~
+# (영문 약어는 그대로 두고 s05에서 코드가 정해진 발음으로 바꾼다 → utils/pronounce.py)
+TTS_UNSAFE = re.compile(r"[0-9%~]")
 
 
-def _violations(draft: ScriptDraft) -> list[str]:
+def _total_range(target_chars: Optional[int] = None) -> tuple[int, int]:
+    """전체 내레이션 목표 글자 수.
+    기본: 30~60초 안쪽으로 여유를 둔 범위 (약 35~55초)
+    target_chars: 실제 음성 길이로 다시 계산한 목표가 있으면 그 ±10%
+    """
+    if target_chars:
+        return int(target_chars * 0.9), int(target_chars * 1.1)
+    cps = settings.chars_per_second
+    return int((settings.min_duration + 5) * cps), int((settings.max_duration - 5) * cps)
+
+
+def _violations(draft: ScriptDraft, n_points: int, t_range: tuple[int, int],
+                has_definition: bool = False) -> list[str]:
     errs = []
     n = len(draft.scenes)
     if not settings.min_scenes <= n <= settings.max_scenes:
         errs.append(f"장면 수가 {n}개입니다. {settings.min_scenes}~{settings.max_scenes}개로 맞추세요.")
+
     lo, hi = settings.min_chars_per_scene, settings.max_chars_per_scene
     for i, s in enumerate(draft.scenes, 1):
         n_chars = len(s.narration)
         if not lo <= n_chars <= hi:
             errs.append(f"{i}번 장면 내레이션이 {n_chars}자입니다. {lo}~{hi}자로 맞추세요.")
+
     total = sum(len(s.narration) for s in draft.scenes)
-    est = total / settings.chars_per_second
-    if not settings.min_duration <= est <= settings.max_duration:
-        errs.append(f"전체 내레이션이 {total}자(약 {est:.0f}초)입니다. "
-                    f"{_total_range()[0]}~{_total_range()[1]}자로 맞추세요.")
+    t_lo, t_hi = t_range
+    if not t_lo <= total <= t_hi:
+        errs.append(f"전체 내레이션이 {total}자(약 {total / settings.chars_per_second:.0f}초)입니다. "
+                    f"{t_lo}~{t_hi}자로 맞추세요.")
+
+    for i, s in enumerate(draft.scenes, 1):
+        bad = sorted(set(TTS_UNSAFE.findall(s.narration)))
+        if bad:
+            errs.append(f"{i}번 장면 narration에 '{''.join(bad)}'가 있습니다. TTS용이므로 숫자·기호를 "
+                        "읽는 그대로 한글로 풀어 쓰세요 (예: 60점 → 육십점, 70~80% → 칠십에서 팔십 퍼센트). "
+                        "숫자 표기는 subtitle_text에만 쓰세요. 영문 약어는 그대로 두세요.")
+
+    if has_definition and draft.scenes and 1 not in draft.scenes[0].point_ids:
+        errs.append("1번 장면에서 핵심 포인트 1번(주제 정의)을 반드시 설명하세요. "
+                    "시청자가 이 주제가 무엇이고 누구를 위한 것인지 첫 장면에서 알아야 합니다.")
+
+    covered = {pid for s in draft.scenes for pid in s.point_ids}
+    missing = [p for p in range(1, n_points + 1) if p not in covered]
+    if missing:
+        errs.append(f"핵심 포인트 {', '.join(map(str, missing))}번이 어느 장면에도 없습니다. "
+                    "구체적인 숫자·사실을 살려서 반드시 포함하세요.")
     return errs
-
-
-def _total_range() -> tuple[int, int]:
-    cps = settings.chars_per_second
-    # 30~60초 범위 안쪽으로 여유를 둔 목표 글자 수
-    return int((settings.min_duration + 5) * cps), int((settings.max_duration - 5) * cps)
 
 
 def _build_project(draft: ScriptDraft, analysis: Analysis, source_url: Optional[str]) -> Project:
@@ -39,6 +73,8 @@ def _build_project(draft: ScriptDraft, analysis: Analysis, source_url: Optional[
         Scene(
             id=i,
             narration=s.narration.strip(),
+            subtitle_text=s.subtitle_text.strip() or None,
+            point_ids=sorted(set(s.point_ids)),
             image_prompt=s.image_prompt.strip(),
             image=f"assets/images/scene_{i:02d}.png",
             audio=f"assets/audio/scene_{i:02d}.wav",
@@ -57,15 +93,23 @@ def _build_project(draft: ScriptDraft, analysis: Analysis, source_url: Optional[
     )
 
 
-def run(job_dir: Path, source_url: Optional[str] = None) -> tuple[Project, dict]:
-    """반환: (Project, 토큰 사용량 합계)"""
+def run(job_dir: Path, source_url: Optional[str] = None, feedback: str = "",
+        target_chars: Optional[int] = None) -> tuple[Project, dict]:
+    """반환: (Project, 토큰 사용량 합계)
+    feedback: 이전 결과의 문제(예: 실제 음성 길이 초과)를 알려 주며 다시 만들 때 사용
+    target_chars: 실제 음성 길이 기준으로 다시 계산한 전체 글자 수 목표
+    """
     out = job_dir / "scenes.json"
-    if out.exists():
+    if out.exists() and not feedback:
         log.info("[s03] scenes.json 존재 → 건너뜀")
         return Project.load(out), {}
 
     analysis = Analysis.model_validate_json((job_dir / "analysis.json").read_text(encoding="utf-8"))
     source = (job_dir / "source.txt").read_text(encoding="utf-8")[:6000]
+    points = analysis.all_points()
+    n_points = len(points)
+    has_def = bool(analysis.topic_definition)
+    t_lo, t_hi = _total_range(target_chars)
 
     system = load_prompt(
         "script",
@@ -74,32 +118,42 @@ def run(job_dir: Path, source_url: Optional[str] = None) -> tuple[Project, dict]
         max_scenes=settings.max_scenes,
         min_chars=settings.min_chars_per_scene,
         max_chars=settings.max_chars_per_scene,
-        min_total=_total_range()[0],
-        max_total=_total_range()[1],
+        min_total=t_lo,
+        max_total=t_hi,
     )
+    point_header = "[핵심 포인트] (1번은 주제 정의 — 첫 장면에서 반드시 설명)" if has_def else "[핵심 포인트]"
     user = (
             f"[제목]\n{analysis.title}\n\n[요약]\n{analysis.summary}\n\n"
-            "[핵심 포인트]\n" + "\n".join(f"- {p}" for p in analysis.key_points) +
+            f"{point_header}\n" + "\n".join(f"{i}. {p}" for i, p in enumerate(points, 1)) +
             f"\n\n[원문 참고]\n{source}"
     )
+    if feedback:
+        user += f"\n\n[이전 대본의 문제점 — 반드시 수정]\n{feedback}"
 
     total = {"model": settings.text_model, "input_tokens": 0, "output_tokens": 0}
+    best, best_errs = None, None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         draft, usage = parse(system, user, ScriptDraft)
         total["input_tokens"] += usage["input_tokens"]
         total["output_tokens"] += usage["output_tokens"]
-        errs = _violations(draft)
+        errs = _violations(draft, n_points, (t_lo, t_hi), has_def)
+        if best is None or len(errs) < len(best_errs):  # 위반이 가장 적은 결과를 남긴다
+            best, best_errs = draft, errs
         if not errs:
             break
         log.warning(f"[s03] 규칙 위반({attempt}/{MAX_ATTEMPTS}): {' / '.join(errs)}")
         user += "\n\n[이전 결과의 문제점 — 반드시 수정]\n" + "\n".join(errs)
-    else:
-        log.warning("[s03] 재시도 후에도 일부 규칙 위반 → 그대로 진행 (TTS 길이로 최종 확인)")
+    if best_errs:
+        log.warning(f"[s03] 재시도 후에도 남은 위반: {' / '.join(best_errs)} → 가장 나은 결과로 진행")
 
-    project = _build_project(draft, analysis, source_url)
+    project = _build_project(best, analysis, source_url)
     project.save(out)
     chars = sum(len(s.narration) for s in project.scenes)
-    log.info(f"[s03] 장면 {len(project.scenes)}개 생성 (내레이션 총 {chars}자, 예상 약 {chars / settings.chars_per_second:.0f}초)")
+    covered = {p for s in project.scenes for p in s.point_ids} & set(range(1, n_points + 1))
+    log.info(f"[s03] 장면 {len(project.scenes)}개 생성 (내레이션 총 {chars}자, "
+             f"예상 약 {chars / settings.chars_per_second:.0f}초, 핵심 포인트 {len(covered)}/{n_points}개 반영)")
+    total["points_covered"] = f"{len(covered)}/{n_points}"
+    total["violations"] = best_errs
     return project, total
 
 
@@ -110,6 +164,9 @@ if __name__ == "__main__":
     p, u = run(Path(sys.argv[1]))
     print(f"\n제목: {p.title}\n")
     for s in p.scenes:
-        print(f"[{s.id}] ({len(s.narration)}자) {s.narration}\n    🎨 {s.image_prompt}\n")
+        print(f"[{s.id}] ({len(s.narration)}자, 포인트 {s.point_ids}) {s.narration}")
+        if s.subtitle_text and s.subtitle_text != s.narration:
+            print(f"    💬 자막: {s.subtitle_text}")
+        print(f"    🎨 {s.image_prompt}\n")
     if u:
         print(f"토큰: 입력 {u['input_tokens']} / 출력 {u['output_tokens']} ({u['model']})")

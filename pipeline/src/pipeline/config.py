@@ -37,13 +37,13 @@ class Settings:
 
     # 영상 길이 제어
     min_scenes: int = 4
-    max_scenes: int = 6
+    max_scenes: int = 7 # 핵심 포인트 장면 최대 6개 + 마지막 정리 장면 1개
     target_duration: int = 45
     min_chars_per_scene: int = 35
     max_chars_per_scene: int = 60
     min_duration: int = 30
     max_duration: int = 60
-    chars_per_second: float = 7.0  # 한국어 TTS 대략 속도 (공백 포함 글자/초)
+    chars_per_second: float = 6.2  # 한국어 TTS 대략 속도 (공백 포함 글자/초)
 
     # 화풍 (모든 장면 공통)
     style_prompt: str = (

@@ -33,7 +33,7 @@ def parse_srt(path: Path) -> list[dict]:
             continue
         start, end = (x.strip() for x in lines[1].split("-->"))
         cues.append({"start": _srt_seconds(start), "end": _srt_seconds(end),
-                     "text": " ".join(lines[2:]).strip()})
+                     "text": "\n".join(lines[2:]).strip()})  # 자막 줄바꿈 유지
     return cues
 
 

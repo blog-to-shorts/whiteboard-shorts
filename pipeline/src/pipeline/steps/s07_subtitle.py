@@ -19,6 +19,7 @@ IMAGE_HEIGHT = 1540      # 그림 높이(px). 1920 중 아래쪽 약 270px를 �
 IMAGE_TOP = 110          # 그림 위쪽 여백(px)
 MAX_CUE_CHARS = 30       # 자막 한 번에 보여줄 최대 글자 수 (세로 화면 2줄 분량)
 END_PAD = 0.3            # s05에서 음성 끝에 붙인 무음 길이 → 자막 계산에서 제외
+LINE_CHARS = 19          # 자막 한 줄에 들어가는 글자 수 (1080px 폭, 글씨 크기 56, 띄어쓰기 포함)
 
 
 # ---------- 자막 ----------
@@ -49,6 +50,30 @@ def split_cues(text: str, max_chars: int = MAX_CUE_CHARS) -> list[str]:
     return cues
 
 
+def wrap_two_lines(cue: str, line_chars: int = LINE_CHARS) -> str:
+    """한 줄을 넘는 자막은 직접 줄을 바꾼다.
+    화면 폭에 맡기면 '왜 자꾸 / 아플까요?'처럼 구절 중간에서 줄이 바뀌기 때문.
+    1순위: 가운데 근처의 쉼표 뒤
+    2순위: 한 글자 단어('그', '수' 등) 옆이 아닌 띄어쓰기 중 가운데에 가장 가까운 곳
+    """
+    if len(cue) <= line_chars:
+        return cue
+    mid = len(cue) / 2
+    spaces = [i for i, ch in enumerate(cue) if ch == " "]
+    if not spaces:
+        return cue
+
+    after_comma = [i for i in spaces if cue[i - 1] == "," and abs(i - mid) <= len(cue) * 0.3]
+    if after_comma:
+        cut = min(after_comma, key=lambda i: abs(i - mid))
+    else:
+        def ok(i: int) -> bool:
+            left, right = cue[:i].split(" ")[-1], cue[i + 1:].split(" ")[0]
+            return len(left) > 1 and len(right) > 1
+        cut = min([i for i in spaces if ok(i)] or spaces, key=lambda i: abs(i - mid))
+    return cue[:cut].rstrip() + "\n" + cue[cut + 1:].lstrip()
+
+
 def _ts(sec: float) -> str:
     ms = int(round(sec * 1000))
     h, ms = divmod(ms, 3_600_000)
@@ -68,7 +93,7 @@ def build_srt(narration: str, duration: float) -> str:
         end = t + speech * w / total
         if i == len(cues):
             end = duration  # 마지막 자막은 장면 끝까지 유지
-        lines.append(f"{i}\n{_ts(t)} --> {_ts(end)}\n{cue}\n")
+        lines.append(f"{i}\n{_ts(t)} --> {_ts(end)}\n{wrap_two_lines(cue)}\n")
         t = end
     return "\n".join(lines)
 
@@ -111,7 +136,7 @@ def run(job_dir: Path, only: list[int] | None = None) -> dict:
             raise ValueError(f"scene {s.id}: duration이 없습니다. s05를 먼저 실행하세요.")
         srt = job_dir / s.subtitle
         srt.parent.mkdir(parents=True, exist_ok=True)
-        srt.write_text(build_srt(s.narration, s.duration), encoding="utf-8")
+        srt.write_text(build_srt(s.subtitle_text or s.narration, s.duration), encoding="utf-8")
 
     with ThreadPoolExecutor(max_workers=2) as ex:
         created = sum(ex.map(lambda s: _convert(job_dir, s), targets))
