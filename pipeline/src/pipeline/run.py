@@ -5,6 +5,8 @@
   python -m pipeline.run --text-file 원문.txt                           # 원문 직접 입력
   python -m pipeline.run --job test01                                   # 기존 job 이어서 실행
 
+결과: jobs/{id}/output.mp4 (1080×1920 화이트보드 숏폼)
+
 각 단계는 결과 파일이 이미 있으면 건너뛰므로, 중간에 실패해도 같은 job으로 다시 실행하면
 실패한 단계부터 이어서 진행된다. 단계별 소요 시간·사용량·오류는 jobs/{id}/log.json에 남는다.
 """
@@ -17,7 +19,8 @@ from typing import Optional
 
 from .config import settings
 from .schema import Project
-from .steps import s01_extract, s02_analyze, s03_script, s04_image, s05_tts
+from .steps import (s01_extract, s02_analyze, s03_script, s04_image, s05_tts,
+                    s06_animate, s07_subtitle, s08_render)
 from .utils.logger import JobLogger, log
 
 
@@ -69,6 +72,17 @@ def run(
             e["image"] = {**img_usage, "seconds": img_sec}
             e["tts"] = {**tts_usage, "seconds": tts_sec}
 
+        with jl.step("s06_animate") as e:
+            e.update(s06_animate.run(job_dir))
+
+        with jl.step("s07_subtitle") as e:
+            e.update(s07_subtitle.run(job_dir))
+
+        with jl.step("s08_render") as e:
+            result = s08_render.run(job_dir)
+            e.update(result)
+            jl.data["output"] = result["output"]
+
     finally:
         jl.data["total_seconds"] = round(time.time() - t_start, 2)
         jl.save()
@@ -76,8 +90,9 @@ def run(
     project = Project.load(job_dir / "scenes.json")
     log.info(
         f"===== job {job_id} 완료: 장면 {len(project.scenes)}개, "
-        f"음성 총 {project.total_duration:.1f}초, 처리 {jl.data['total_seconds']}초 ====="
+        f"영상 {project.total_duration:.1f}초, 처리 {jl.data['total_seconds']}초 ====="
     )
+    log.info(f"결과 영상: {jl.data['output']}")
     return job_dir
 
 

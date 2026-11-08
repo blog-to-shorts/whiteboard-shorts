@@ -55,5 +55,11 @@ class Settings:
     )
     parallel_workers: int = 4
 
+    # 드로잉 애니메이션 (whiteboard-animator)
+    animate_quality: str = os.getenv("ANIMATE_QUALITY", "high")  # low | medium | high
+    animate_workers: int = 2  # CPU 작업이라 동시 실행은 2개 정도가 적당
+
+    # 최종 렌더 (Remotion)
+    remotion_browser: str = os.getenv("REMOTION_BROWSER", "")  # 비워 두면 Remotion 기본 Chrome 사용
 
 settings = Settings()
