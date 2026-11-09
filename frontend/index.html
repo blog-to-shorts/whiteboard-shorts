@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Whiteboard Shorts</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <script src="/assets/demo.js" defer></script>
+</head>
+<body>
+  <header class="masthead"><span class="brand-mark" aria-hidden="true">W</span> Whiteboard Shorts <span class="badge">로컬 데모</span></header>
+  <main>
+    <section class="workspace" aria-labelledby="heading">
+      <div class="intro">
+        <p class="eyebrow">BLOG TO VIDEO</p>
+        <h1 id="heading">블로그 글을<br>화이트보드 영상으로.</h1>
+        <p class="description">블로그 주소를 입력하면 대본, 일러스트, 한국어 내레이션과 자막이 담긴 세로형 영상을 만듭니다.</p>
+      </div>
+      <form id="generate-form">
+        <label for="url">블로그 글 주소</label>
+        <div class="input-row">
+          <input id="url" name="url" type="url" placeholder="https://blog.naver.com/..." required>
+          <button id="generate" type="submit">영상 생성</button>
+        </div>
+        <p class="hint">블로그 홈 주소 대신 개별 글의 주소를 입력하세요.</p>
+      </form>
+      <section class="progress-card" aria-labelledby="progress-title">
+        <div class="progress-header"><h2 id="progress-title">생성 진행</h2><span id="status" role="status">대기 중</span></div>
+        <ol id="steps">
+          <li>본문 추출</li><li>콘텐츠 분석</li><li>대본·장면 생성</li><li>일러스트 생성</li>
+          <li>한국어 내레이션</li><li>드로잉 애니메이션</li><li>자막 생성</li><li>최종 영상 합성</li>
+        </ol>
+      </section>
+    </section>
+    <section class="preview" aria-labelledby="preview-title">
+      <div class="preview-header">
+        <div><p class="eyebrow">VIDEO PREVIEW</p><h2 id="preview-title">영상 미리보기</h2></div>
+        <button id="show-sample" type="button" hidden>예시 보기</button>
+      </div>
+      <div class="player">
+        <p id="empty-preview">완성된 영상이 여기에 표시됩니다.</p>
+        <video id="video" aria-label="화이트보드 숏폼 영상" controls playsinline preload="metadata" hidden></video>
+      </div>
+      <div class="preview-footer">
+        <span id="video-label">세로형 MP4 · 9:16</span>
+        <a id="download" download hidden>MP4 다운로드 ↓</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

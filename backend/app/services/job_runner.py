@@ -22,12 +22,16 @@ def execute(job_id: str, req: JobCreate) -> None:
     info = _jobs[job_id]
     info.status = JobStatus.running
     try:
-        pipeline_run.run(url=req.url, text=req.text, job_id=job_id)
-        info.status = JobStatus.done
+        pipeline_run.run(
+            url=req.url, text=req.text, job_id=job_id,
+            on_step=lambda step: setattr(info, "current_step", str(step)),
+        )
         info.video_url = f"/jobs/{job_id}/video"
-    except Exception as e:
+        info.status = JobStatus.done
+    except Exception:
+        step = f"STEP {int(info.current_step):02d}" if info.current_step else "작업 준비"
+        info.error = f"{step} 중 문제가 발생했습니다. 서버의 작업 로그를 확인하세요."
         info.status = JobStatus.error
-        info.error = str(e)
 
 
 def get(job_id: str) -> JobInfo | None:
