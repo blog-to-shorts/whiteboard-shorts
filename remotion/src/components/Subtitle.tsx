@@ -1,6 +1,5 @@
 import { AbsoluteFill } from "remotion";
 
-// TODO: SRT 파싱 후 현재 프레임에 맞는 줄만 표시
 export const Subtitle: React.FC<{ text: string }> = ({ text }) => (
   <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: 220 }}>
     <div
@@ -12,6 +11,8 @@ export const Subtitle: React.FC<{ text: string }> = ({ text }) => (
         color: "white",
         fontSize: 52,
         fontWeight: 700,
+        fontFamily: 'system-ui, "Apple SD Gothic Neo", "Noto Sans CJK KR", sans-serif',
+        whiteSpace: "pre-line",
         lineHeight: 1.35,
         textAlign: "center",
         wordBreak: "keep-all",

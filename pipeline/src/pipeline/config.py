@@ -9,7 +9,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-4o-mini")
-IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1")
+IMAGE_MODEL = os.getenv("OPENAI_IMAGE_MODEL", "gpt-image-1.5")
 
 TTS_ENGINE = os.getenv("TTS_ENGINE", "macos_say")
 TTS_VOICE = os.getenv("TTS_VOICE", "Yuna")

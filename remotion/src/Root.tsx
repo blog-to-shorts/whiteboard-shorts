@@ -1,6 +1,6 @@
 import { Composition } from "remotion";
 import { WhiteboardVideo } from "./WhiteboardVideo";
-import type { ProjectProps } from "./types";
+import { sceneFrames, type ProjectProps } from "./types";
 
 const FPS = 30;
 
@@ -24,8 +24,9 @@ export const RemotionRoot: React.FC = () => (
     defaultProps={defaultProps}
     // 장면 수·길이를 JSON에서 읽어 총 길이를 계산
     calculateMetadata={({ props }) => {
-      const total = props.scenes.reduce((s, sc) => s + (sc.duration ?? 0), 0);
-      return { durationInFrames: Math.max(1, Math.ceil(total * FPS)) };
+      const fps = props.fps;
+      const total = props.scenes.reduce((sum, scene) => sum + sceneFrames(scene, fps), 0);
+      return { fps, durationInFrames: Math.max(1, total) };
     }}
   />
 );

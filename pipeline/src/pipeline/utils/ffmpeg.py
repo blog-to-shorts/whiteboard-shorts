@@ -1,3 +1,4 @@
+import json
 import subprocess
 from pathlib import Path
 
@@ -9,6 +10,16 @@ def probe_duration(path: Path) -> float:
         capture_output=True, text=True, check=True,
     )
     return float(out.stdout.strip())
+
+
+def is_h264_yuv420p(path: Path) -> bool:
+    out = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",
+         "stream=codec_name,pix_fmt", "-of", "json", str(path)],
+        capture_output=True, text=True, check=True,
+    )
+    streams = json.loads(out.stdout)["streams"]
+    return bool(streams) and streams[0] == {"codec_name": "h264", "pix_fmt": "yuv420p"}
 
 
 def to_h264(src: Path, dst: Path) -> Path:

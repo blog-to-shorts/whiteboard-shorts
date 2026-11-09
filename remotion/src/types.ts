@@ -8,7 +8,11 @@ export type Scene = {
   video?: string | null;
   subtitle?: string | null;
   duration?: number | null;
+  captions?: { start: number; end: number; text: string }[];
 };
+
+export const sceneFrames = (scene: Scene, fps: number): number =>
+  Math.max(1, Math.ceil((scene.duration ?? 1) * fps));
 
 export type ProjectProps = {
   title: string;
