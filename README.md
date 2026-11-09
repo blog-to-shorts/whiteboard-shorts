@@ -10,7 +10,7 @@
 | `pipeline/` | Python AI 파이프라인 (STEP 01~08) |
 | `backend/` | FastAPI: 작업 생성, 상태 조회, 결과 MP4 제공 |
 | `remotion/` | 최종 영상 합성 (React + TypeScript) |
-| `frontend/` | 웹 UI (P2) |
+| `frontend/` | 로컬 데모 화면 |
 | `vendor/whiteboard-animator` | 드로잉 애니메이션 (git submodule) |
 | `jobs/` | 실행 결과 (`jobs/{job_id}/`, git 제외) |
 
@@ -21,8 +21,8 @@ git clone --recurse-submodules <repo-url>
 cp .env.example .env            # OPENAI_API_KEY 입력
 
 # Python
-cd pipeline && uv sync && cd ..
-cd backend && uv sync && cd ..
+cd pipeline && uv sync && uv pip install ../vendor/whiteboard-animator && cd ..
+cd backend && uv sync && uv pip install ../vendor/whiteboard-animator && cd ..
 
 # Remotion
 cd remotion && npm install && cd ..
@@ -42,9 +42,19 @@ cd remotion && npm install && cd ..
 # 특정 단계부터 다시 실행
 ./scripts/run_local.sh --job-id <job_id> --from-step 4
 
-# API 서버
-cd backend && uv run uvicorn app.main:app --reload
+# 로컬 데모 및 API 서버
+cd backend && uv run uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
+
+브라우저에서 `http://127.0.0.1:8000`을 열고 개별 블로그 글 주소를 입력합니다. 8단계 진행 상태를 확인하고, 완성 영상을 재생하거나 내려받을 수 있습니다. 생성에는 `.env`의 OpenAI API 키와 설치된 로컬 렌더링 도구가 필요합니다.
+
+예시 영상은 `jobs/naver-224455184965/final.mp4`가 있을 때 표시됩니다. 새 체크아웃에서 예시를 준비하려면 프로젝트 루트에서 아래 명령을 실행합니다.
+
+```bash
+bash scripts/run_local.sh --url "https://blog.naver.com/allnewk724/224455184965" --job-id naver-224455184965
+```
+
+데모 작업 상태는 서버 메모리에 저장됩니다. 서버를 재시작하면 진행 상태 조회가 초기화되며 생성한 MP4는 작업 폴더에 남습니다.
 
 ## 파이프라인 단계
 
@@ -96,7 +106,7 @@ whiteboard-shorts/
 │       │   ├── SceneClip.tsx
 │       │   └── Subtitle.tsx
 │       └── types.ts
-├── frontend/                    # 웹 UI (P2, 아직 비어있음)
+├── frontend/                    # 로컬 데모 화면
 ├── vendor/
 │   └── whiteboard-animator/     # 드로잉 애니메이션 (git submodule)
 ├── jobs/                        # 실행 결과 (job_id 별 디렉토리, git 제외)
