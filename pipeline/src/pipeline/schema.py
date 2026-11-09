@@ -23,6 +23,7 @@ class Project(BaseModel):
     target_duration: int = 45
     style_prompt: str = ""
     summary: Optional[str] = None
+    key_points: list[str] = Field(default_factory=list)
     scenes: list[Scene] = Field(default_factory=list)
 
     @property
