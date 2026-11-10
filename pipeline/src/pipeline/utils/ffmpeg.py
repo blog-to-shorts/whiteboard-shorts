@@ -31,12 +31,14 @@ TAIL_SEC = 0.25        # 장면 끝 무음 (다음 장면까지 숨 쉬는 간�
 
 def to_wav(src: Path, dst: Path, sample_rate: int = 44100,
            lead: float = LEAD_SEC, tail: float = TAIL_SEC) -> Path:
-    """mp3 → mono wav. 앞뒤 무음을 잘라내고 일정한 길이의 무음을 다시 붙인다."""
-    trim = f"silenceremove=start_periods=1:start_threshold={SILENCE_DB}:start_silence=0.02"
+    """mp3 → mono wav. 앞뒤 무음(끝의 숨소리 포함)을 잘라내고 일정한 길이의 무음을 다시 붙인다."""
+    head = f"silenceremove=start_periods=1:start_threshold={SILENCE_DB}:start_silence=0.02"
+    end = f"silenceremove=start_periods=1:start_threshold={TAIL_SILENCE_DB}:start_silence=0.02"
     af = ",".join([
-        trim, "areverse", trim, "areverse",          # 앞 무음 제거 → 뒤집어서 뒤 무음 제거
-        f"adelay={int(lead * 1000)}:all=1",           # 앞 무음 붙이기
-        f"apad=pad_dur={tail}",                       # 뒤 무음 붙이기
+        head,                                              # 앞 무음 제거
+        "areverse", end, "afade=t=in:d=0.04", "areverse",  # 뒤집어서 끝의 숨소리·무음 제거 + 끝 0.04초 페이드아웃
+        f"adelay={int(lead * 1000)}:all=1",                # 앞 무음 붙이기
+        f"apad=pad_dur={tail}",                            # 뒤 무음 붙이기
     ])
     run(["-i", str(src), "-af", af, "-ac", "1", "-ar", str(sample_rate), str(dst)])
     return dst
