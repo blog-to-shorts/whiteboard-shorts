@@ -6,7 +6,8 @@ GPT에게 영문 약어를 한글로 바꾸게 하면 'CBT → 케이비티'처�
   1) 발음 사전에 있는 단어 → 사전 발음        NCLEX → 엔클렉스
   2) 대문자 약어 (2~6자)   → 알파벳 이름       CBT → 씨비티, PAT → 피에이티
   3) 그 밖의 영어 단어      → 그대로 (TTS가 영어로 읽음)  Saunders
-  4) 대본에 남은 숫자       → 한자어 숫자      106학점 → 백육학점, 70~80% → 칠십에서 팔십 퍼센트
+  4) 대본에 남은 숫자       → 한자어 숫자      106학점 → 백육학점, 70~80% → 칠십에서 팔십 퍼센트,
+                                               2~30:1 → 이삼십 대 일
      (GPT가 이미 '스무 문제'처럼 바꾼 고유어 표현은 건드리지 않는다)
 """
 import re
@@ -71,8 +72,19 @@ def read_number(n: str) -> str:
     return out
 
 
+def _abbreviated_range(m: re.Match) -> str:
+    """2~30 → 이삼십, 4~50만 → 사오십만 (앞 숫자가 뒤 숫자의 줄임말인 경우)
+    그 밖의 범위는 '에서'로 읽는다: 70~80 → 70에서 80"""
+    a, b = m.group(1), m.group(2)
+    head, zeros = b.rstrip("0"), len(b) - len(b.rstrip("0"))
+    if len(a) == 1 and len(head) == 1 and zeros >= 1 and int(head) == int(a) + 1:
+        return DIGITS[int(a)] + read_number(b)
+    return f"{a}에서 {b}"
+
+
 def _numbers_to_speech(text: str) -> str:
-    text = re.sub(r"(\d)\s*~\s*(\d)", r"\1에서 \2", text)   # 70~80 → 70에서 80
+    text = re.sub(r"(\d)\s*:\s*(\d)", r"\1 대 \2", text)          # 30:1 → 30 대 1
+    text = re.sub(r"(\d+)\s*~\s*(\d+)", _abbreviated_range, text)  # 70~80 → 70에서 80, 2~30 → 이삼십
     text = _NUMBER.sub(lambda m: read_number(m.group(0)), text)
     return text.replace("%", " 퍼센트")
 
@@ -92,5 +104,6 @@ if __name__ == "__main__":
               "포스코 PAT는 인적성 검사입니다.", "NGN 신유형과 AI 문제",
               "333 위아너스 NCLEX-RN은 요약형 교재입니다.",
               "응시자격은 4년제 졸업자와 학점은행제 106학점 이상 이수자입니다.",
-              "2005년 신설, 합격률은 70~80%대, 과목당 스무 문제, 10000명"]:
+              "2005년 신설, 합격률은 70~80%대, 과목당 스무 문제, 10000명",
+              "면접은 최종경쟁률이 2~30:1까지 올라간 적이 있습니다."]:
         print(t, "→", to_speech(t))

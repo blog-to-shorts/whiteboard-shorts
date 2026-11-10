@@ -11,6 +11,8 @@ dependencies = [
     "pillow>=13.0.0",
     "whiteboard-animator",
     "numpy>=2.4.6",
+    "fastapi>=0.162.2",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 [project.optional-dependencies]
