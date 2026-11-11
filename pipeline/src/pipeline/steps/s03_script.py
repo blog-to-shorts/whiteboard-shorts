@@ -3,7 +3,8 @@
 생성 결과를 코드로 검사하고, 규칙을 어기면 무엇이 틀렸는지 알려 주며 다시 요청한다.
   - 장면 수, 장면별·전체 글자 수 (→ 영상 길이 30~60초)
   - 핵심 포인트 누락 여부 (→ 원문 핵심 정보 누락 자동 검증)
-그다음 원문과 대조해 수치·조건 오류를 검사한다 (→ 원문 왜곡 자동 검증, 진님 feature/jin에서 이식).
+    - 이미지 프롬프트의 글자 지시: 숫자·따옴표·한글·금지어 (→ 글자보다 그림 중심)
+그다음 원문과 대조해 수치·조건 오류를 검사한다.
   - 오류가 있으면 그 내용을 붙여 대본을 1회 다시 만든다
   - 그래도 남으면 멈추지 않고 log.json에 fact_issues로 남긴 뒤 진행한다
 """
@@ -21,6 +22,21 @@ MAX_ATTEMPTS = 2  # 규칙 위반 시 피드백을 붙여 1회 재요청
 # TTS가 어색하게 읽을 수 있는 문자: 숫자, %, ~
 # (영문 약어는 그대로 두고 s05에서 코드가 정해진 발음으로 바꾼다 → utils/pronounce.py)
 TTS_UNSAFE = re.compile(r"[0-9%~]")
+
+
+
+def _image_text_pattern() -> re.Pattern:
+    """이미지 프롬프트에서 '그림 속 글자'를 부르는 표현 (진님·새훈님 방식 이식).
+    항상 검사: 숫자, 따옴표로 묶은 문구, 한글 / 단어 목록: prompts/image_text_words.txt"""
+    path = Path(__file__).resolve().parents[1] / "prompts" / "image_text_words.txt"
+    words = [w.split("#")[0].strip() for w in path.read_text(encoding="utf-8").splitlines()]
+    words = [re.escape(w) for w in words if w]
+    fixed = [r"\b\d+\b", r"[\"“”‘’][^\"“”‘’]+[\"“”‘’]", r"[가-힣]+"]
+    word_part = [rf"\b(?:{'|'.join(words)})\b"] if words else []
+    return re.compile("|".join(fixed + word_part), re.IGNORECASE)
+
+
+IMAGE_TEXT = _image_text_pattern()
 
 
 def _total_range(target_chars: Optional[int] = None) -> tuple[int, int]:
@@ -63,6 +79,13 @@ def _violations(draft: ScriptDraft, n_points: int, t_range: tuple[int, int],
     if has_definition and draft.scenes and 1 not in draft.scenes[0].point_ids:
         errs.append("1번 장면에서 핵심 포인트 1번(주제 정의)을 반드시 설명하세요. "
                     "시청자가 이 주제가 무엇이고 누구를 위한 것인지 첫 장면에서 알아야 합니다.")
+
+    for i, s in enumerate(draft.scenes, 1):
+        found = sorted({m.group(0) for m in IMAGE_TEXT.finditer(s.image_prompt)})
+        if found:
+            errs.append(f"{i}번 장면 image_prompt에 그림 속 글자를 부르는 표현({', '.join(found)})이 있습니다. "
+                        "숫자·따옴표·글자·라벨·표지판 없이 사물, 사람의 행동, 화살표 같은 그림으로만 표현하세요 "
+                        "(예: '60점' → a test paper with a big check mark).")
 
     covered = {pid for s in draft.scenes for pid in s.point_ids}
     missing = [p for p in range(1, n_points + 1) if p not in covered]

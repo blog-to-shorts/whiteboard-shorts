@@ -59,6 +59,11 @@ class Settings:
     )
     parallel_workers: int = 4
 
+    # 이미지 후처리 (새훈님 방식): 생성 직후 회색조 변환 + 거의 흰색은 순백으로
+    # 컬러를 도입하면 IMAGE_GRAYSCALE=0, 후처리를 아예 끄려면 IMAGE_WHITE_THRESHOLD=0도 함께
+    image_grayscale: bool = os.getenv("IMAGE_GRAYSCALE", "1") != "0"
+    image_white_threshold: int = int(os.getenv("IMAGE_WHITE_THRESHOLD", "235"))  # 0~255, 0이면 끔
+
     # 드로잉 애니메이션 (whiteboard-animator)
     animate_quality: str = os.getenv("ANIMATE_QUALITY", "high")  # low | medium | high
     animate_workers: int = 2  # CPU 작업이라 동시 실행은 2개 정도가 적당
@@ -66,9 +71,8 @@ class Settings:
     # 드로잉 순서: GPT가 그림을 보고 "무엇부터 그릴지"를 정한다. 0이면 기본(위→아래) 순서
     draw_order: bool = os.getenv("DRAW_ORDER", "1") != "0"
 
-    # 대본 수치·조건 원문 대조 검증 (진님 방식). 0이면 끔
+    # 대본 수치·조건 원문 대조 검증. 0이면 끔
     fact_check: bool = os.getenv("FACT_CHECK", "1") != "0"
-
     # 수치 검증 호출의 추론 강도. 기본값(미지정)은 회차·날짜 짝 오류를 놓쳐서 low로 둔다 (실측: low부터 검출)
     fact_check_effort: str = os.getenv("FACT_CHECK_EFFORT", "low")  # low | medium | high
 

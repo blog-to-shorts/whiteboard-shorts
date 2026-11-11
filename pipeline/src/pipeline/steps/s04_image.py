@@ -8,6 +8,7 @@ from ..schema import Project, Scene
 from ..utils.llm import client
 from ..utils.logger import log
 from ..utils.retry import retry
+from ..utils.image_post import postprocess
 
 
 def build_prompt(scene: Scene, style: str) -> str:
@@ -43,6 +44,8 @@ def _one(job_dir: Path, scene: Scene, style: str) -> tuple[int, bool, dict]:
     out.parent.mkdir(parents=True, exist_ok=True)
     png, usage = _generate(build_prompt(scene, style))
     out.write_bytes(png)
+    # 드로잉 엔진이 옅은 얼룩·회색을 선으로 그리지 않도록 정리 (config: image_grayscale, image_white_threshold)
+    postprocess(out, settings.image_grayscale, settings.image_white_threshold)
     log.info(f"[s04] scene {scene.id:02d} 이미지 저장")
     return scene.id, True, usage
 
