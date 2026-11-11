@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from ..models import JobCreate, JobInfo, JobsCreated
+from ..models import JobCreate, JobInfo, JobsCreated, RerunRequest
 from ..services import job_runner
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -42,3 +42,19 @@ def get_video(job_id: str, download: bool = False):
         path, media_type="video/mp4",
         filename=f"{job_id}.mp4" if download else None,
     )
+
+
+
+@router.post("/{job_id}/rerun", response_model=JobInfo, status_code=202)
+def rerun_job(job_id: str, body: RerunRequest):
+    """장면 수정 내용을 scenes.json에 반영하고, 바뀐 부분만 다시 만든다.
+    읽는 문장 → 그 장면 음성부터 / 그림 설명 → 그 장면 그림부터 / 자막만 → 영상 합성만"""
+    try:
+        job_runner.rerun(job_id, [e.model_dump() for e in body.edits])
+    except LookupError as e:
+        raise HTTPException(404, str(e))
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return job_runner.job_info(job_id)

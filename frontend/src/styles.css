@@ -87,6 +87,18 @@ padding:16px;font:500 17px/1.5 var(--sans);resize:vertical;outline:none}
 .script li{display:grid;grid-template-columns:60px 1fr auto;gap:12px;padding:14px 0;border-top:1px solid var(--line);align-items:baseline}
 .script .num{font-family:var(--px);color:var(--accent)}
 .script p{margin:0;font-size:17px;line-height:1.5}
+.scene-side{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.edit-btn,.ghost{background:none;border:1px solid var(--ink);padding:4px 12px;font-size:13px}
+.edit-btn:hover:not(:disabled),.ghost:hover{background:var(--ink);color:#fff}
+.edit-btn:disabled{opacity:.4;cursor:not-allowed}
+.script li.editing{background:rgba(255,255,255,.3)}
+.scene-edit{display:flex;flex-direction:column;gap:12px;margin-top:14px}
+.scene-edit label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.scene-edit textarea{border:0;border-bottom:2px solid var(--ink);background:rgba(255,255,255,.5);
+    padding:10px;font:500 15px/1.5 var(--sans);color:var(--ink);resize:vertical;outline:none}
+.scene-edit-foot{display:flex;align-items:center;gap:10px;justify-content:flex-end}
+.scene-edit-foot .hint{margin-right:auto}
+.scene-edit-foot .cta{padding:10px 18px;font-size:14px}
 
 /* accent */
 .accent-block{background:var(--accent);color:#111;min-height:90vh}

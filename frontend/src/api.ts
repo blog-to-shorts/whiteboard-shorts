@@ -2,6 +2,16 @@
 
 export type JobStatus = "queued" | "running" | "done" | "error";
 
+export type Scene = {
+  id: number;
+  narration: string;
+  subtitle_text: string | null;
+  image_prompt: string | null;
+  duration: number | null;
+};
+
+export type SceneEdit = { id: number; narration?: string; subtitle_text?: string; image_prompt?: string };
+
 export type Job = {
   job_id: string;
   status: JobStatus;
@@ -9,7 +19,7 @@ export type Job = {
   title: string | null;
   current_step: string | null;
   steps: { step: string; status: string; seconds: number | null }[];
-  scenes: { id: number; narration: string; subtitle_text: string | null; duration: number | null }[];
+  scenes: Scene[];
   duration: number | null;
   total_seconds: number | null;
   video_url: string | null;
@@ -38,8 +48,10 @@ export const api = {
     call<{ job_ids: string[] }>("/jobs", { method: "POST", body: JSON.stringify({ text }) }),
   list: () => call<Job[]>("/jobs"),
   get: (id: string) => call<Job>(`/jobs/${id}`),
+  rerun: (id: string, edits: SceneEdit[]) =>
+      call<Job>(`/jobs/${id}/rerun`, { method: "POST", body: JSON.stringify({ edits }) }),
   videoUrl: (job: Job) => (job.video_url ? BASE + job.video_url : null),
-  downloadUrl: (job: Job) => (job.video_url ? `${BASE}${job.video_url}?download=true` : null),
+  downloadUrl: (job: Job) => (job.video_url ? `${BASE}${job.video_url}&download=true` : null),
 };
 
 // 파이프라인 단계 이름 → 화면 표시용

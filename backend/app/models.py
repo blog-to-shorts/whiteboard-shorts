@@ -36,6 +36,7 @@ class SceneInfo(BaseModel):
     id: int
     narration: str
     subtitle_text: Optional[str] = None
+    image_prompt: Optional[str] = None
     duration: Optional[float] = None
 
 
@@ -53,6 +54,16 @@ class JobInfo(BaseModel):
     error: Optional[str] = None
     queue_position: Optional[int] = None   # 대기 중일 때 앞에 남은 작업 수
 
+class SceneEdit(BaseModel):
+    """장면 하나의 수정 내용. 바꾸지 않을 항목은 비워 둔다."""
+    id: int
+    narration: Optional[str] = None      # 읽는 문장 (TTS)
+    subtitle_text: Optional[str] = None  # 화면 자막
+    image_prompt: Optional[str] = None   # 그림 설명 (영어)
+
+
+class RerunRequest(BaseModel):
+    edits: list[SceneEdit] = Field(min_length=1)
 
 class JobsCreated(BaseModel):
     job_ids: list[str]

@@ -101,7 +101,10 @@ def run(
         text: Optional[str] = None,
         from_step: Optional[int] = None,
         scene_ids: Optional[list[int]] = None,
+        regen_script: bool = True,
 ) -> Path:
+    """regen_script=False: 음성 길이가 범위를 벗어나도 대본을 다시 만들지 않고 경고만 남긴다
+    (웹에서 사람이 고친 대본을 덮어쓰지 않기 위해)"""
     job_id = job_id or new_job_id()
     job_dir = settings.jobs_dir / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -135,7 +138,10 @@ def run(
         with jl.step("s05_tts") as e:
             e.update(s05_tts.run(job_dir))
             fb, target = _length_feedback(job_dir)
-            if fb:
+            if fb and not regen_script:
+                log.warning(f"[run] {fb} (수정한 대본을 유지하므로 다시 만들지 않음)")
+                e["length_warning"] = fb
+            elif fb:
                 log.warning(f"[run] {fb} → 대본 재생성")
                 e["regenerated"] = fb
                 _, usage = s03_script.run(job_dir, source_url=url, feedback=fb, target_chars=target)
