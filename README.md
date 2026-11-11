@@ -21,14 +21,19 @@ API 키: OpenAI, ElevenLabs(API 키 + 목소리 ID)
 ## 2. 설치 (처음 한 번)
 
 ```bash
+# 0) 줄바꿈 설정 — 코드를 받기 전에 한 번만 (Windows와 macOS의 줄바꿈 차이로 모든 줄이 바뀐 것처럼 보이는 문제 방지)
+git config --global core.autocrlf input   # macOS / Linux
+git config --global core.autocrlf true    # Windows
+
 # 1) 코드 받기 — whiteboard-animator가 서브모듈이라 --recurse-submodules 필수
 git clone --recurse-submodules https://github.com/blog-to-shorts/whiteboard-shorts.git
 cd whiteboard-shorts
-git checkout feature/zia
+git checkout develop
+git checkout -b feature/<이름>   # 각자 작업 브랜치
 git submodule update --init      # 이미 받은 경우, vendor/whiteboard-animator가 비어 있으면 실행
 
 # 2) 키 설정
-cp .env.example .env             # OPENAI_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID 입력
+cp .env.example .env             # Windows: copy .env.example .env  →  OPENAI_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID 입력
 
 # 3) Python 패키지 (pipeline 가상환경 하나에 파이프라인·백엔드·드로잉 엔진이 모두 설치됨)
 cd pipeline && uv sync && cd ..
@@ -71,6 +76,8 @@ cd frontend && npm run dev
 브라우저에서 http://localhost:5173 → URL 입력(여러 줄이면 순서대로 일괄 생성) → 단계별 진행 확인 → 영상 재생·다운로드.
 프론트를 먼저 켜서 연결 오류(ECONNREFUSED)가 나면 백엔드를 켠 뒤 새로고침하면 됩니다.
 
+완성된 작업은 아래 Script 영역에서 장면별로 "수정"을 눌러 자막·읽는 문장·그림 설명을 고치고, 그 장면만 다시 만들 수 있습니다.
+
 ### 명령어로 실행
 
 ```bash
@@ -85,7 +92,7 @@ python -m pipeline.run --job <job_id>
 
 # 특정 단계부터 다시 만들기
 python -m pipeline.run --job <job_id> --from-step 5              # 음성부터 전체 장면
-python -m pipeline.run --job <job_id> --from-step 4 --scene 2 3  # 2·3번 장면 이미지부터
+python -m pipeline.run --job <job_id> --from-step 4 --scene 2 3  # 2·3번 장면 이미지부터 (음성도 다시 만듦 → 그림만 바꾸려면 웹 장면 수정 사용)
 python -m pipeline.run --job <job_id> --from-step 7              # 자막·렌더만 (API 비용 없음)
 ```
 
@@ -105,7 +112,7 @@ python -c "import json,sys; [print(s['id'], s['narration']) for s in json.load(o
 | --- | --- | --- |
 | 01 | `steps/s01_extract.py` | 블로그 본문 추출 (네이버는 iframe 안 PostView로 다시 요청) |
 | 02 | `steps/s02_analyze.py` | 제목·요약·주제 정의·핵심 포인트 분석 → `analysis.json` |
-| 03 | `steps/s03_script.py` | 장면별 대본(TTS용·자막용 분리) + 이미지 프롬프트 → `scenes.json`. 장면 수·글자 수·핵심 포인트 누락을 코드로 검사해 재요청 |
+| 03 | `steps/s03_script.py` | 장면별 대본(TTS용·자막용 분리) + 이미지 프롬프트 → `scenes.json`. 장면 수·글자 수·핵심 포인트 누락·그림 속 글자를 코드로 검사해 재요청하고, 수치·조건을 원문과 대조 검증 |
 | 05 | `steps/s05_tts.py` | ElevenLabs 음성 + 실제 길이 측정. 30~60초를 벗어나면 대본을 한 번 다시 만듦 |
 | 04 | `steps/s04_image.py` | 장면별 화이트보드 이미지 (공통 화풍, 병렬 생성) |
 | 06 | `steps/s06_animate.py` | whiteboard-animator 드로잉. GPT가 그림을 보고 그리는 순서를 정함 (`DRAW_ORDER=0`이면 위→아래) |
@@ -121,6 +128,8 @@ python -c "import json,sys; [print(s['id'], s['narration']) for s in json.load(o
 | 대본·분석 규칙 | `pipeline/src/pipeline/prompts/script.md`, `analyze.md` |
 | 드로잉 순서 규칙 | `pipeline/src/pipeline/prompts/regions.md` |
 | 화풍 | `pipeline/src/pipeline/config.py`의 `style_prompt` |
+| 그림 속 글자 금지어 | `pipeline/src/pipeline/prompts/image_text_words.txt` |
+| 수치 검증·이미지 흑백 후처리 켜기/끄기 | `.env`의 `FACT_CHECK`, `IMAGE_GRAYSCALE` |
 | 영문 약어·숫자 발음 | `pipeline/src/pipeline/utils/pronounce.py` (`PRONUNCIATIONS` 사전) |
 | 장면 사이 무음·숨소리 제거 기준 | `pipeline/src/pipeline/utils/ffmpeg.py` (`TAIL_SILENCE_DB` 등) |
 | 성우 | `.env`의 `ELEVENLABS_VOICE_ID` |
@@ -153,5 +162,6 @@ whiteboard-shorts/
 ├── remotion/src/           최종 합성 (React + TypeScript)
 ├── vendor/whiteboard-animator/   드로잉 엔진 (git submodule)
 ├── jobs/                   실행 결과 (git 제외 — 기업 URL이 들어 있으니 커밋 금지)
-└── scripts/run_local.sh    uv run으로 파이프라인 실행
+├── docs/                   이식 기록(INTEGRATION.md) · 평가 양식(EVALUATION_TEMPLATE.md)
+└── scripts/                run_local.sh(uv run 실행) · eval_jobs.py(job 평가 지표 → CSV)
 ```
