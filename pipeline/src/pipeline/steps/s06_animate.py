@@ -55,11 +55,13 @@ def regions_path(job_dir: Path, scene: Scene) -> Path:
 
 
 def _clamp_box(b: _Box) -> dict:
-    """GPT 좌표를 0~1000 안으로 정리하고, 선이 잘리지 않게 사방 15씩 넓힌다."""
+    """GPT 좌표를 0~1000 안으로 정리하고, 선이 잘리지 않게 사방 15씩 넓힌다.
+    영역이 가장자리에 붙어 있어도 끝 좌표가 1000을 넘지 않도록 시작 좌표는 999까지만 둔다."""
     y1, y2 = sorted((b.ymin, b.ymax))
     x1, x2 = sorted((b.xmin, b.xmax))
     c = lambda v: max(0, min(1000, v))
-    y1, x1, y2, x2 = c(y1 - 15), c(x1 - 15), c(y2 + 15), c(x2 + 15)
+    y1, x1 = min(c(y1 - 15), 999), min(c(x1 - 15), 999)
+    y2, x2 = c(y2 + 15), c(x2 + 15)
     return {"ymin": y1, "xmin": x1, "ymax": max(y2, y1 + 1), "xmax": max(x2, x1 + 1)}
 
 
