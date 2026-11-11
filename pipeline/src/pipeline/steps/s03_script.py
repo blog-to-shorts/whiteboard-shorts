@@ -3,13 +3,17 @@
 생성 결과를 코드로 검사하고, 규칙을 어기면 무엇이 틀렸는지 알려 주며 다시 요청한다.
   - 장면 수, 장면별·전체 글자 수 (→ 영상 길이 30~60초)
   - 핵심 포인트 누락 여부 (→ 원문 핵심 정보 누락 자동 검증)
+그다음 원문과 대조해 수치·조건 오류를 검사한다 (→ 원문 왜곡 자동 검증, 진님 feature/jin에서 이식).
+  - 오류가 있으면 그 내용을 붙여 대본을 1회 다시 만든다
+  - 그래도 남으면 멈추지 않고 log.json에 fact_issues로 남긴 뒤 진행한다
 """
+import json
 import re
 from pathlib import Path
 from typing import Optional
 
 from ..config import settings
-from ..schema import Analysis, Project, Scene, ScriptDraft
+from ..schema import Analysis, FactCheck, Project, Scene, ScriptDraft
 from ..utils.llm import load_prompt, parse
 from ..utils.logger import log
 
@@ -66,6 +70,24 @@ def _violations(draft: ScriptDraft, n_points: int, t_range: tuple[int, int],
         errs.append(f"핵심 포인트 {', '.join(map(str, missing))}번이 어느 장면에도 없습니다. "
                     "구체적인 숫자·사실을 살려서 반드시 포함하세요.")
     return errs
+
+
+def _fact_issues(draft: ScriptDraft, source: str, total: dict) -> list[str]:
+    """자막용 문장(숫자가 원래 표기로 남아 있음)을 원문과 대조해 수치·조건 오류 목록을 돌려준다."""
+    payload = {
+        "source": source,
+        "narrations": [{"scene": i, "text": s.subtitle_text or s.narration}
+                       for i, s in enumerate(draft.scenes, 1)],
+    }
+    try:
+        result, usage = parse(load_prompt("fact_check"), json.dumps(payload, ensure_ascii=False), FactCheck,
+                              reasoning_effort=settings.fact_check_effort)
+    except Exception as e:  # 검증 호출이 실패해도 영상 생성은 계속한다
+        log.warning(f"[s03] 수치 검증 호출 실패 → 건너뜀 ({e})")
+        return []
+    total["input_tokens"] += usage["input_tokens"]
+    total["output_tokens"] += usage["output_tokens"]
+    return [i.strip() for i in result.issues if i.strip()]
 
 
 def _build_project(draft: ScriptDraft, analysis: Analysis, source_url: Optional[str]) -> Project:
@@ -146,6 +168,34 @@ def run(job_dir: Path, source_url: Optional[str] = None, feedback: str = "",
     if best_errs:
         log.warning(f"[s03] 재시도 후에도 남은 위반: {' / '.join(best_errs)} → 가장 나은 결과로 진행")
 
+    # 수치·조건 원문 대조 검증
+    fact_issues: list[str] = []
+    if settings.fact_check:
+        full_source = (job_dir / "source.txt").read_text(encoding="utf-8")[:12000]
+        fact_issues = _fact_issues(best, full_source, total)
+        if fact_issues:
+            log.warning(f"[s03] 수치·조건 오류 {len(fact_issues)}건 → 대본 1회 재작성: {' / '.join(fact_issues)}")
+            fix_user = user + "\n\n[원문과 다른 수치·조건 — 반드시 원문대로 수정]\n" + "\n".join(fact_issues)
+            try:
+                draft, usage = parse(system, fix_user, ScriptDraft)
+                total["input_tokens"] += usage["input_tokens"]
+                total["output_tokens"] += usage["output_tokens"]
+                errs = _violations(draft, n_points, (t_lo, t_hi), has_def)
+            except Exception as e:  # 재작성이 실패해도 기존 대본으로 계속 진행
+                log.warning(f"[s03] 수치 오류 재작성 실패 → 기존 대본 유지 ({e})")
+                draft, errs = None, best_errs + ["재작성 실패"]
+            if draft is not None and len(errs) <= len(best_errs):  # 길이·포인트 규칙을 더 어기지 않을 때만 교체
+                best, best_errs = draft, errs
+                fact_issues = _fact_issues(best, full_source, total)
+            elif draft is not None:
+                log.warning("[s03] 재작성 결과가 대본 규칙을 더 어겨서 기존 대본 유지")
+            if fact_issues:
+                log.warning(f"[s03] 남은 수치·조건 오류 {len(fact_issues)}건 → 경고만 남기고 진행")
+            else:
+                log.info("[s03] 수치·조건 오류 수정 완료")
+        else:
+            log.info("[s03] 수치·조건 검증 통과")
+
     project = _build_project(best, analysis, source_url)
     project.save(out)
     chars = sum(len(s.narration) for s in project.scenes)
@@ -154,6 +204,7 @@ def run(job_dir: Path, source_url: Optional[str] = None, feedback: str = "",
              f"예상 약 {chars / settings.chars_per_second:.0f}초, 핵심 포인트 {len(covered)}/{n_points}개 반영)")
     total["points_covered"] = f"{len(covered)}/{n_points}"
     total["violations"] = best_errs
+    total["fact_issues"] = fact_issues
     return project, total
 
 

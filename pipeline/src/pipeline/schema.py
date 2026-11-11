@@ -63,3 +63,8 @@ class SceneDraft(BaseModel):
 
 class ScriptDraft(BaseModel):
     scenes: list[SceneDraft]
+
+
+class FactCheck(BaseModel):
+    """대본 수치·조건 검증 결과 (prompts/fact_check.md)"""
+    issues: list[str] = Field(description="원문과 다른 수치·조건 오류. 장면 번호, 문제 표현, 원문 근거, 수정 방법. 없으면 빈 목록")

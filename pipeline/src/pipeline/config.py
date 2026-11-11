@@ -66,6 +66,12 @@ class Settings:
     # 드로잉 순서: GPT가 그림을 보고 "무엇부터 그릴지"를 정한다. 0이면 기본(위→아래) 순서
     draw_order: bool = os.getenv("DRAW_ORDER", "1") != "0"
 
+    # 대본 수치·조건 원문 대조 검증 (진님 방식). 0이면 끔
+    fact_check: bool = os.getenv("FACT_CHECK", "1") != "0"
+
+    # 수치 검증 호출의 추론 강도. 기본값(미지정)은 회차·날짜 짝 오류를 놓쳐서 low로 둔다 (실측: low부터 검출)
+    fact_check_effort: str = os.getenv("FACT_CHECK_EFFORT", "low")  # low | medium | high
+
     # 최종 렌더 (Remotion)
     remotion_browser: str = os.getenv("REMOTION_BROWSER", "")  # 비워 두면 Remotion 기본 Chrome 사용
 
