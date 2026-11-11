@@ -27,6 +27,7 @@ from .config import settings
 from .schema import Project
 from .steps import (s01_extract, s02_analyze, s03_script, s04_image, s05_tts,
                     s06_animate, s07_subtitle, s08_render)
+from .utils import cost
 from .utils.logger import JobLogger, log
 
 
@@ -158,6 +159,7 @@ def run(
 
     finally:
         jl.data["total_seconds"] = round(time.time() - t_start, 2)
+        jl.data["cost"] = cost.summarize(jl.data["steps"])  # 이 job에 쓴 API 비용 (재실행분 포함 누적)
         jl.save()
 
     project = Project.load(job_dir / "scenes.json")
@@ -165,6 +167,9 @@ def run(
         f"===== job {job_id} 완료: 장면 {len(project.scenes)}개, "
         f"영상 {project.total_duration:.1f}초, 처리 {jl.data['total_seconds']}초 ====="
     )
+    c = jl.data["cost"]
+    unpriced = f" (단가 미확인: {', '.join(c['unpriced_steps'])})" if c["unpriced_steps"] else ""
+    log.info(f"API 비용(누적): ${c['total_usd']:.3f}{unpriced}")
     log.info(f"결과 영상: {jl.data['output']}")
     return job_dir
 

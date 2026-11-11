@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -29,6 +30,9 @@ class Settings:
     elevenlabs_api_key: str = os.getenv("ELEVENLABS_API_KEY", "")
     elevenlabs_voice_id: str = os.getenv("ELEVENLABS_VOICE_ID", "")
     elevenlabs_model_id: str = os.getenv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
+    # ElevenLabs 1,000자당 가격(USD). 요금제마다 달라서 직접 넣는다. 비우면 비용 '미확인'
+    elevenlabs_usd_per_1k_chars: Optional[float] = (
+        float(os.getenv("ELEVENLABS_USD_PER_1K_CHARS")) if os.getenv("ELEVENLABS_USD_PER_1K_CHARS") else None)
 
     # 경로
     jobs_dir: Path = field(default_factory=lambda: _path("JOBS_DIR", "./jobs"))

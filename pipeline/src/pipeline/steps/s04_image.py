@@ -21,7 +21,8 @@ def build_prompt(scene: Scene, style: str) -> str:
 
 
 @retry(times=3)
-def _generate(prompt: str) -> bytes:
+def _generate(prompt: str) -> tuple[bytes, dict]:
+    """반환: (PNG 바이트, 토큰 사용량). 사용량은 비용 계산(utils/cost.py)에 쓴다."""
     resp = client().images.generate(
         model=settings.image_model,
         prompt=prompt,
@@ -29,17 +30,21 @@ def _generate(prompt: str) -> bytes:
         quality=settings.image_quality,
         n=1,
     )
-    return base64.b64decode(resp.data[0].b64_json)
+    u = getattr(resp, "usage", None)
+    usage = {"input_tokens": getattr(u, "input_tokens", 0) or 0,
+             "output_tokens": getattr(u, "output_tokens", 0) or 0}
+    return base64.b64decode(resp.data[0].b64_json), usage
 
 
-def _one(job_dir: Path, scene: Scene, style: str) -> tuple[int, bool]:
+def _one(job_dir: Path, scene: Scene, style: str) -> tuple[int, bool, dict]:
     out = job_dir / scene.image
     if out.exists():
-        return scene.id, False
+        return scene.id, False, {}
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_bytes(_generate(build_prompt(scene, style)))
+    png, usage = _generate(build_prompt(scene, style))
+    out.write_bytes(png)
     log.info(f"[s04] scene {scene.id:02d} 이미지 저장")
-    return scene.id, True
+    return scene.id, True, usage
 
 
 def run(job_dir: Path, only: list[int] | None = None) -> dict:
@@ -52,12 +57,14 @@ def run(job_dir: Path, only: list[int] | None = None) -> dict:
         for s in targets:
             (job_dir / s.image).unlink(missing_ok=True)
 
-    created = 0
+    created, tokens_in, tokens_out = 0, 0, 0
     with ThreadPoolExecutor(max_workers=settings.parallel_workers) as ex:
         futures = [ex.submit(_one, job_dir, s, style) for s in targets]
         for f in as_completed(futures):
-            _, new = f.result()  # 한 장면이라도 실패하면 여기서 예외 → 단계 실패로 기록
+            _, new, usage = f.result()  # 한 장면이라도 실패하면 여기서 예외 → 단계 실패로 기록
             created += new
+            tokens_in += usage.get("input_tokens", 0)
+            tokens_out += usage.get("output_tokens", 0)
 
     skipped = len(targets) - created
     log.info(f"[s04] 완료: 새로 생성 {created}장, 기존 파일 사용 {skipped}장")
@@ -66,6 +73,8 @@ def run(job_dir: Path, only: list[int] | None = None) -> dict:
         "images": created,
         "size": settings.image_size,
         "quality": settings.image_quality,
+        "image_input_tokens": tokens_in,
+        "image_output_tokens": tokens_out,
     }
 
 
