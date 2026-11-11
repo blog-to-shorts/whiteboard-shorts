@@ -5,7 +5,7 @@ from pathlib import Path
 from ..config import settings
 from ..schema import Project, Scene
 from ..tts import synthesize
-from ..utils.ffmpeg import probe_duration, to_wav
+from ..utils.ffmpeg import LEAD_SEC, probe_duration, to_wav
 from ..utils.logger import log
 from ..utils.pronounce import to_speech
 
@@ -21,10 +21,18 @@ def _one(job_dir: Path, scene: Scene, prev_text: str, next_text: str) -> tuple[i
     wav.parent.mkdir(parents=True, exist_ok=True)
     mp3 = wav.with_suffix(".mp3")
     # 영문 약어는 정해진 발음으로 바꿔서 읽힌다 (자막은 원래 표기 유지)
-    synthesize(to_speech(scene.narration), mp3,
-               prev_text=to_speech(prev_text), next_text=to_speech(next_text))
-    to_wav(mp3, wav)
+    speech = to_speech(scene.narration)
+    align = synthesize(speech, mp3, prev_text=to_speech(prev_text), next_text=to_speech(next_text))
+    trimmed = to_wav(mp3, wav)
     mp3.unlink(missing_ok=True)
+    # 글자별 발화 시각을 wav 기준으로 옮겨 저장 (앞 무음을 잘라 낸 만큼 당기고, 붙인 무음만큼 민다)
+    if align:
+        shift = LEAD_SEC - trimmed
+        scene.speech_text = "".join(align["chars"])
+        scene.char_times = [[round(max(a + shift, 0), 3), round(max(b + shift, 0), 3)]
+                            for a, b in zip(align["starts"], align["ends"])]
+    else:
+        scene.speech_text, scene.char_times = None, None
     log.info(f"[s05] scene {scene.id:02d} 음성 저장")
     return scene.id, len(scene.narration)
 

@@ -16,6 +16,9 @@ class Scene(BaseModel):
     video: Optional[str] = None
     subtitle: Optional[str] = None
     duration: Optional[float] = None  # 실제 음성 길이(초)
+    # 자막 싱크용 (s05가 기록, s07이 사용): TTS에 실제로 보낸 문장과 그 글자별 [시작, 끝] 시각(장면 음성 기준 초)
+    speech_text: Optional[str] = None
+    char_times: Optional[list[list[float]]] = None
 
 
 class Project(BaseModel):

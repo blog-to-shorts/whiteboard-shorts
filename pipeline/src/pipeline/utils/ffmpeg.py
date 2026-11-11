@@ -45,9 +45,11 @@ def _decode(src: Path, sample_rate: int) -> np.ndarray:
 
 
 def to_wav(src: Path, dst: Path, sample_rate: int = 44100,
-           lead: float = LEAD_SEC, tail: float = TAIL_SEC) -> Path:
-    """mp3 → mono wav. 앞뒤 무음(끝의 숨소리 포함)을 잘라내고 일정한 길이의 무음을 다시 붙인다."""
+           lead: float = LEAD_SEC, tail: float = TAIL_SEC) -> float:
+    """mp3 → mono wav. 앞뒤 무음(끝의 숨소리 포함)을 잘라내고 일정한 길이의 무음을 다시 붙인다.
+    반환: 원본 앞에서 잘라 낸 길이(초). 원본 기준 시각 t는 wav에서 t - 반환값 + lead가 된다 (자막 싱크용)."""
     x = _decode(src, sample_rate)
+    start = 0
     win = int(WINDOW_SEC * sample_rate)
     n = len(x) // win
     db = 20 * np.log10(np.sqrt((x[: n * win].reshape(n, win) ** 2).mean(axis=1)) + 1e-9)
@@ -67,4 +69,4 @@ def to_wav(src: Path, dst: Path, sample_rate: int = 44100,
         w.setsampwidth(2)
         w.setframerate(sample_rate)
         w.writeframes((np.clip(x, -1, 1) * 32767).astype(np.int16).tobytes())
-    return dst
+    return float(start) / sample_rate
