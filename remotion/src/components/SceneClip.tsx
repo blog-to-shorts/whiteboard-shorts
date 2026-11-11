@@ -1,17 +1,14 @@
-import { AbsoluteFill, Audio, OffthreadVideo, staticFile } from "remotion";
+import React from "react";
+import { AbsoluteFill, OffthreadVideo, staticFile } from "remotion";
+import type { SceneProps } from "../types";
 import { Subtitle } from "./Subtitle";
-import type { Scene } from "../types";
 
-const asset = (base: string, p?: string | null) => (p ? staticFile(`${base}/${p}`) : undefined);
-
-export const SceneClip: React.FC<{ scene: Scene; assetBase: string }> = ({ scene, assetBase }) => {
-  const video = asset(assetBase, scene.video);
-  const audio = asset(assetBase, scene.audio);
+// 장면 하나 = 드로잉 영상(내레이션 포함) + 자막
+export const SceneClip: React.FC<{ scene: SceneProps }> = ({ scene }) => {
   return (
-    <AbsoluteFill>
-      {video && <OffthreadVideo src={video} muted style={{ width: "100%", height: "100%", objectFit: "contain" }} />}
-      {audio && <Audio src={audio} />}
-      <Subtitle text={scene.narration} />
-    </AbsoluteFill>
+      <AbsoluteFill style={{ backgroundColor: "white" }}>
+        <OffthreadVideo src={staticFile(scene.video)} />
+        <Subtitle cues={scene.cues} />
+      </AbsoluteFill>
   );
 };

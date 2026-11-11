@@ -1,105 +1,157 @@
 # Whiteboard Shorts
 
-블로그 URL 또는 원문을 입력하면 장면별 대본, 화이트보드 일러스트, 드로잉 애니메이션, 한국어 내레이션, 자막을 생성해
-1080x1920 / 30~60초 MP4 초안을 만드는 AI 파이프라인 MVP.
+블로그 URL 하나를 넣으면 장면별 대본, 화이트보드 일러스트, 드로잉 애니메이션, 한국어 내레이션, 자막을 만들어
+1080×1920 / 30~60초 세로형 MP4로 합성하는 AI 파이프라인 MVP.
 
-## 구조
+- 대본·분석: OpenAI `gpt-5.4-mini` · 이미지: OpenAI `gpt-image-2`
+- 음성: ElevenLabs · 드로잉: whiteboard-animator · 합성: FFmpeg + Remotion
+- 웹: FastAPI 백엔드 + React(Vite) 프론트엔드
 
-| 폴더 | 역할 |
-| --- | --- |
-| `pipeline/` | Python AI 파이프라인 (STEP 01~08) |
-| `backend/` | FastAPI: 작업 생성, 상태 조회, 결과 MP4 제공 |
-| `remotion/` | 최종 영상 합성 (React + TypeScript) |
-| `frontend/` | 웹 UI (P2) |
-| `vendor/whiteboard-animator` | 드로잉 애니메이션 (git submodule) |
-| `jobs/` | 실행 결과 (`jobs/{job_id}/`, git 제외) |
+## 1. 준비물
 
-## 설치
+| 도구 | 버전 | 확인 명령 |
+| --- | --- | --- |
+| Python | 3.11 이상 | `python3 --version` |
+| [uv](https://docs.astral.sh/uv/) | 최신 | `uv --version` |
+| Node.js | 20 이상 | `node --version` |
+| FFmpeg | ffmpeg·ffprobe가 PATH에 있어야 함 | `ffmpeg -version` |
+
+API 키: OpenAI, ElevenLabs(API 키 + 목소리 ID)
+
+## 2. 설치 (처음 한 번)
 
 ```bash
-git clone --recurse-submodules <repo-url>
-cp .env.example .env            # OPENAI_API_KEY 입력
+# 1) 코드 받기 — whiteboard-animator가 서브모듈이라 --recurse-submodules 필수
+git clone --recurse-submodules https://github.com/blog-to-shorts/whiteboard-shorts.git
+cd whiteboard-shorts
+git checkout feature/zia
+git submodule update --init      # 이미 받은 경우, vendor/whiteboard-animator가 비어 있으면 실행
 
-# Python
+# 2) 키 설정
+cp .env.example .env             # OPENAI_API_KEY, ELEVENLABS_API_KEY, ELEVENLABS_VOICE_ID 입력
+
+# 3) Python 패키지 (pipeline 가상환경 하나에 파이프라인·백엔드·드로잉 엔진이 모두 설치됨)
 cd pipeline && uv sync && cd ..
-cd backend && uv sync && cd ..
 
-# Remotion
+# 4) Node 패키지
 cd remotion && npm install && cd ..
+cd frontend && npm install && cd ..
 ```
 
-필수 도구: Python 3.11+, Node.js 20+, FFmpeg, (macOS) `say`
+> **주의**: 백엔드도 `pipeline` 가상환경에서 실행합니다. `backend/` 폴더에서 `uv sync`·`uv run` 하지 마세요.
+> 그 환경에는 파이프라인이 없어서 영상 생성이 실패합니다.
 
-## 실행
+가상환경 켜기 (이후 모든 명령은 프로젝트 루트에서, 가상환경을 켠 상태로 실행)
 
 ```bash
-# CLI로 URL -> MP4
-./scripts/run_local.sh --url "https://blog.example.com/post"
-
-# 원문 텍스트 파일로 실행
-./scripts/run_local.sh --text-file ./sample.txt
-
-# 특정 단계부터 다시 실행
-./scripts/run_local.sh --job-id <job_id> --from-step 4
-
-# API 서버
-cd backend && uv run uvicorn app.main:app --reload
+source pipeline/.venv/bin/activate        # macOS / Linux
+pipeline\.venv\Scripts\activate           # Windows (PowerShell·cmd)
 ```
 
-## 파이프라인 단계
+설치 확인
 
-1. 본문 추출 (Requests + BeautifulSoup)
-2. 콘텐츠 분석 (OpenAI)
-3. 대본·장면 생성 -> `scenes.json`
-4. 화이트보드 이미지 생성 (OpenAI Image)
-5. 한국어 TTS + 음성 길이 측정
-6. 드로잉 애니메이션 (whiteboard-animator)
-7. 자막(SRT) 생성 + FFmpeg H.264 변환
-8. 최종 합성 (Remotion)
+```bash
+python -c "import pipeline, whiteboard_animator, fastapi; print('ok')"
+```
 
-## 프로젝트 구조
+## 3. 실행
+
+### 웹으로 실행 (시연용)
+
+터미널 2개를 열고 **백엔드를 먼저** 켭니다.
+
+```bash
+# 터미널 1: 백엔드 (프로젝트 루트, 가상환경 켠 상태)
+uvicorn backend.app.main:app --port 8000
+
+# 터미널 2: 프론트엔드
+cd frontend && npm run dev
+```
+
+브라우저에서 http://localhost:5173 → URL 입력(여러 줄이면 순서대로 일괄 생성) → 단계별 진행 확인 → 영상 재생·다운로드.
+프론트를 먼저 켜서 연결 오류(ECONNREFUSED)가 나면 백엔드를 켠 뒤 새로고침하면 됩니다.
+
+### 명령어로 실행
+
+```bash
+# URL → MP4 (결과: jobs/<job_id>/output.mp4)
+python -m pipeline.run --url "https://blog.naver.com/<아이디>/<글번호>"
+
+# 본문 추출이 실패하면 원문 텍스트 파일로
+python -m pipeline.run --text-file ./sample.txt
+
+# 기존 job 이어서 실행 (실패한 단계부터 다시)
+python -m pipeline.run --job <job_id>
+
+# 특정 단계부터 다시 만들기
+python -m pipeline.run --job <job_id> --from-step 5              # 음성부터 전체 장면
+python -m pipeline.run --job <job_id> --from-step 4 --scene 2 3  # 2·3번 장면 이미지부터
+python -m pipeline.run --job <job_id> --from-step 7              # 자막·렌더만 (API 비용 없음)
+```
+
+단계 번호: 1 추출 · 2 분석 · 3 대본 · 4 이미지 · 5 음성 · 6 드로잉 · 7 자막·변환 · 8 렌더
+(실제 실행 순서는 음성(5)을 이미지(4)보다 먼저 만들어 길이를 확인합니다.)
+
+job 목록과 장면 내레이션 확인:
+
+```bash
+ls jobs
+python -c "import json,sys; [print(s['id'], s['narration']) for s in json.load(open(f'jobs/{sys.argv[1]}/scenes.json'))['scenes']]" <job_id>
+```
+
+## 4. 파이프라인 단계
+
+| STEP | 파일 | 하는 일 |
+| --- | --- | --- |
+| 01 | `steps/s01_extract.py` | 블로그 본문 추출 (네이버는 iframe 안 PostView로 다시 요청) |
+| 02 | `steps/s02_analyze.py` | 제목·요약·주제 정의·핵심 포인트 분석 → `analysis.json` |
+| 03 | `steps/s03_script.py` | 장면별 대본(TTS용·자막용 분리) + 이미지 프롬프트 → `scenes.json`. 장면 수·글자 수·핵심 포인트 누락을 코드로 검사해 재요청 |
+| 05 | `steps/s05_tts.py` | ElevenLabs 음성 + 실제 길이 측정. 30~60초를 벗어나면 대본을 한 번 다시 만듦 |
+| 04 | `steps/s04_image.py` | 장면별 화이트보드 이미지 (공통 화풍, 병렬 생성) |
+| 06 | `steps/s06_animate.py` | whiteboard-animator 드로잉. GPT가 그림을 보고 그리는 순서를 정함 (`DRAW_ORDER=0`이면 위→아래) |
+| 07 | `steps/s07_subtitle.py` | 자막(SRT) + 1080×1920 / 30fps 변환 |
+| 08 | `steps/s08_render.py` | Remotion 최종 합성 → `output.mp4` |
+
+각 단계는 결과 파일이 이미 있으면 건너뜁니다. 단계별 소요 시간·토큰 사용량·오류는 `jobs/<job_id>/log.json`에 남습니다.
+
+## 5. 품질 관련 설정 위치
+
+| 바꾸고 싶은 것 | 위치 |
+| --- | --- |
+| 대본·분석 규칙 | `pipeline/src/pipeline/prompts/script.md`, `analyze.md` |
+| 드로잉 순서 규칙 | `pipeline/src/pipeline/prompts/regions.md` |
+| 화풍 | `pipeline/src/pipeline/config.py`의 `style_prompt` |
+| 영문 약어·숫자 발음 | `pipeline/src/pipeline/utils/pronounce.py` (`PRONUNCIATIONS` 사전) |
+| 장면 사이 무음·숨소리 제거 기준 | `pipeline/src/pipeline/utils/ffmpeg.py` (`TAIL_SILENCE_DB` 등) |
+| 성우 | `.env`의 `ELEVENLABS_VOICE_ID` |
+| 영상 길이·장면 수·글자 수 | `pipeline/src/pipeline/config.py` |
+| 웹 화면 | `frontend/src/App.tsx`, `styles.css` |
+
+## 6. 자주 나는 오류
+
+| 증상 | 해결 |
+| --- | --- |
+| `No module named 'whiteboard_animator'` 또는 `'PIL'` | `vendor/whiteboard-animator`가 비어 있으면 `git submodule update --init` 후 `cd pipeline && uv sync` |
+| `command not found: uvicorn` | 가상환경을 켰는지 확인 (`source pipeline/.venv/bin/activate`) |
+| 프론트에서 `ECONNREFUSED` | 백엔드를 먼저 켜고 새로고침 |
+| ElevenLabs `402` | 무료 요금제는 Voice Library 목소리를 API로 못 씀 → 기본(premade) 목소리 ID 사용 |
+| 명령에 `<job_id>`를 그대로 입력해 오류 | `ls jobs`로 실제 job 이름을 확인해 바꿔 넣기 |
+
+## 7. 폴더 구조
 
 ```
 whiteboard-shorts/
-├── backend/                     # FastAPI 서버
-│   ├── app/
-│   │   ├── main.py              # FastAPI 앱 엔트리포인트
-│   │   ├── models.py            # 요청/응답 모델
-│   │   ├── routers/
-│   │   │   └── jobs.py          # 작업 생성/조회 API
-│   │   └── services/
-│   │       └── job_runner.py    # 파이프라인 실행 서비스
-│   └── pyproject.toml
-├── pipeline/                    # Python AI 파이프라인
-│   ├── src/pipeline/
-│   │   ├── run.py               # 파이프라인 오케스트레이터
-│   │   ├── config.py            # 설정
-│   │   ├── schema.py            # scenes.json 등 데이터 스키마
-│   │   ├── steps/               # STEP 01~08 구현
-│   │   │   ├── s01_extract.py   # 본문 추출
-│   │   │   ├── s02_analyze.py   # 콘텐츠 분석
-│   │   │   ├── s03_script.py    # 대본·장면 생성
-│   │   │   ├── s04_image.py     # 화이트보드 이미지 생성
-│   │   │   ├── s05_tts.py       # 한국어 TTS
-│   │   │   ├── s06_animate.py   # 드로잉 애니메이션
-│   │   │   ├── s07_subtitle.py  # 자막 생성 + 변환
-│   │   │   └── s08_render.py    # 최종 합성 호출
-│   │   ├── tts/                 # TTS 어댑터 (macOS say 등)
-│   │   ├── utils/               # ffmpeg, logger, retry 유틸
-│   │   └── prompts/             # OpenAI 프롬프트 템플릿
-│   └── tests/
-├── remotion/                    # 최종 영상 합성 (React + TypeScript)
-│   └── src/
-│       ├── Root.tsx
-│       ├── WhiteboardVideo.tsx
-│       ├── components/
-│       │   ├── SceneClip.tsx
-│       │   └── Subtitle.tsx
-│       └── types.ts
-├── frontend/                    # 웹 UI (P2, 아직 비어있음)
-├── vendor/
-│   └── whiteboard-animator/     # 드로잉 애니메이션 (git submodule)
-├── jobs/                        # 실행 결과 (job_id 별 디렉토리, git 제외)
-└── scripts/
-    └── run_local.sh             # 로컬 실행 스크립트
+├── pipeline/src/pipeline/
+│   ├── run.py              오케스트레이터 (부분 재생성 --from-step / --scene)
+│   ├── config.py · schema.py
+│   ├── steps/              s01_extract … s08_render
+│   ├── tts/                ElevenLabs
+│   ├── prompts/            analyze · script · regions
+│   └── utils/              ffmpeg(무음 정리) · pronounce(발음) · llm · logger · retry
+├── backend/app/            FastAPI: 작업 생성·목록·상태·영상, 대기열로 1건씩 순서대로 실행
+├── frontend/src/           React + Vite 웹 UI (/api → localhost:8000 프록시)
+├── remotion/src/           최종 합성 (React + TypeScript)
+├── vendor/whiteboard-animator/   드로잉 엔진 (git submodule)
+├── jobs/                   실행 결과 (git 제외 — 기업 URL이 들어 있으니 커밋 금지)
+└── scripts/run_local.sh    uv run으로 파이프라인 실행
 ```
