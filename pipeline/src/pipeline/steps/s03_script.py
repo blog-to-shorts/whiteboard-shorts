@@ -26,7 +26,7 @@ TTS_UNSAFE = re.compile(r"[0-9%~]")
 
 
 def _image_text_pattern() -> re.Pattern:
-    """이미지 프롬프트에서 '그림 속 글자'를 부르는 표현 (진님·새훈님 방식 이식).
+    """이미지 프롬프트에서 '그림 속 글자'를 부르는 표현.
     항상 검사: 숫자, 따옴표로 묶은 문구, 한글 / 단어 목록: prompts/image_text_words.txt"""
     path = Path(__file__).resolve().parents[1] / "prompts" / "image_text_words.txt"
     words = [w.split("#")[0].strip() for w in path.read_text(encoding="utf-8").splitlines()]

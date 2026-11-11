@@ -3,7 +3,6 @@
 # 화풍 담당이 테스트하면서 추가·삭제하면 된다. 대소문자 구분 없음, 단어 단위로 찾음.
 # 숫자(3, 60 등)·따옴표·한글은 이 목록과 별도로 항상 검사한다.
 #
-# 출처: 진님(feature/jin)·새훈님(whiteboard-shorts-saehoon) 금지어를 합침
 logo
 logos
 banner

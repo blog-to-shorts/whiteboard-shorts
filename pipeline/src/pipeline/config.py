@@ -59,7 +59,7 @@ class Settings:
     )
     parallel_workers: int = 4
 
-    # 이미지 후처리 (새훈님 방식): 생성 직후 회색조 변환 + 거의 흰색은 순백으로
+    # 이미지 후처리 : 생성 직후 회색조 변환 + 거의 흰색은 순백으로
     # 컬러를 도입하면 IMAGE_GRAYSCALE=0, 후처리를 아예 끄려면 IMAGE_WHITE_THRESHOLD=0도 함께
     image_grayscale: bool = os.getenv("IMAGE_GRAYSCALE", "1") != "0"
     image_white_threshold: int = int(os.getenv("IMAGE_WHITE_THRESHOLD", "235"))  # 0~255, 0이면 끔

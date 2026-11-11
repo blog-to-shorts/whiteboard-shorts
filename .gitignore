@@ -15,6 +15,7 @@ __pycache__/
 node_modules/
 remotion/out/
 remotion/public/jobs/
+frontend/dist/
 
 # pipeline outputs
 jobs/*
