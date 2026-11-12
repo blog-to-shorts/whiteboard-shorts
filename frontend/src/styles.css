@@ -147,3 +147,25 @@ body{background-image:linear-gradient(rgba(59,96,197,.045) 1px,transparent 1px),
 .joblist li.sel{background:var(--accent)}
 .joblist li.sel .idx{color:var(--bg)}
 .dock-links a:focus-visible,.dock-contact:focus-visible,button:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+
+/* Creation form */
+.create{padding:clamp(20px,3vw,36px);background:#fffaf0;border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 0 rgba(39,41,35,.05)}
+.create .tabs{flex-wrap:wrap;gap:8px;padding-bottom:20px;margin-bottom:0}
+.create .tabs button{padding:10px 16px;border:1px solid transparent;border-radius:8px;font-size:16px;line-height:1.5;letter-spacing:-.02em;transition:background-color .15s,color .15s}
+.create .tabs button:hover{background:rgba(59,96,197,.06);color:var(--accent)}
+.create .tabs button.on{background:var(--accent);border-color:var(--accent);color:#fffaf0;text-decoration:none}
+.create textarea{display:block;min-height:150px;padding:20px;border:1px solid #b5b5a8;border-radius:10px;background:#fffdf8;font-size:16px;line-height:1.7;transition:border-color .15s,box-shadow .15s}
+.create textarea:focus{background:#fffdf8;border-color:var(--accent);outline:2px solid var(--accent);outline-offset:3px;box-shadow:0 0 0 6px rgba(59,96,197,.06)}
+.create .create-foot{gap:16px;flex-wrap:wrap;margin-top:20px}
+.create .hint{font-family:var(--sans);font-size:13px;line-height:1.6;overflow-wrap:anywhere}
+.create .cta{min-height:50px;padding:13px 24px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);color:#fff;box-shadow:0 3px 0 #29458e;transition:background-color .15s,box-shadow .15s,transform .15s}
+.create .cta:hover:not(:disabled){background:#2e4fa9;box-shadow:0 4px 0 #233b7b;transform:translateY(-1px)}
+.create .cta:active:not(:disabled){transform:translateY(2px);box-shadow:none}
+.create .cta:disabled{background:#e8e2d6;border-color:#d7d0c2;color:#68685e;box-shadow:none}
+@media(max-width:540px){
+.create .tabs{gap:6px}.create .tabs button{padding:9px 12px;font-size:14px}
+.create textarea{padding:16px;font-size:16px}
+.create .create-foot{align-items:stretch;flex-direction:column;gap:12px}
+.create .cta{width:100%}
+}
+@media(prefers-reduced-motion:reduce){.create .tabs button,.create textarea,.create .cta{transition:none}.create .cta:hover:not(:disabled),.create .cta:active:not(:disabled){transform:none}}
