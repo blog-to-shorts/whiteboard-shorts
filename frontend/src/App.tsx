@@ -4,9 +4,10 @@ import { api, Job, JobStatus, Scene, STEP_LABELS, STEP_ORDER } from "./api";
 // ---------- 사이트 이름: 여기만 바꾸면 워드마크·탭 제목이 함께 바뀐다 ----------
 // pixel: 픽셀 글꼴로 바꿔 쓸 글자의 위치 (0부터)
 const BRAND = {
-  top: { word: "SKETCH", pixel: [2, 4] },
-  bottom: { word: "SHORTS", pixel: [2] },
-  role: "Blog-to-Shorts Pipeline",
+  top: { word: "뚝딱", pixel: [] },
+  bottom: { word: "쇼츠", pixel: [] },
+  role: "뚝딱쇼츠",
+  tagline: "당신의 블로그를 숏폼으로 그려드립니다.",
 };
 
 const STATUS_LABEL: Record<JobStatus, string> = {
@@ -28,7 +29,7 @@ export default function App() {
   const [reloadKey, setReloadKey] = useState(0); // 장면을 다시 만들면 올려서 상태 갱신을 다시 시작
 
   useEffect(() => {
-    document.title = `${cap(BRAND.top.word)} ${cap(BRAND.bottom.word)}`;
+    document.title = BRAND.role;
   }, []);
 
   const refreshList = useCallback(async () => {
@@ -110,7 +111,7 @@ export default function App() {
           <Wordmark {...BRAND.bottom} className="wm-bottom" />
           <span className="sq hero-sq" />
           <p className="hero-tagline">
-            블로그 글 하나를 넣으면 대본, 그림, 내레이션, 드로잉, 자막까지 자동으로 이어 붙여 30~60초 화이트보드 숏폼을 만듭니다.
+            {BRAND.tagline}
           </p>
         </section>
 
@@ -431,10 +432,6 @@ function SceneRow({ jobId, scene, locked, onRerun }: { jobId: string; scene: Sce
       </span>
       </li>
   );
-}
-
-function cap(w: string) {
-  return w.charAt(0) + w.slice(1).toLowerCase();
 }
 
 function shortUrl(u: string) {
