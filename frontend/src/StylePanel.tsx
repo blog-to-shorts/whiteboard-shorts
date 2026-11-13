@@ -151,7 +151,7 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
       <div className="style-panel">
         <div className="block-head">
           <span className="sq" />
-          <h2>자막 변경<sup>{"{02}"}</sup></h2>
+          <h2>자막 변경</h2>
         </div>
         <p className="style-target">
           적용할 영상 <b>{job.title ?? job.job_id}</b> <span className="muted">· {job.job_id}</span>
