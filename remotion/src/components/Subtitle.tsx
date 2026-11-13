@@ -1,10 +1,10 @@
 import React from "react";
 import { AbsoluteFill, interpolate, useCurrentFrame, useVideoConfig } from "remotion";
-import type { Cue } from "../types";
+import type { Cue, SubtitleStyle } from "../types";
 
-// 화면 아래쪽 흰 여백(약 270px)에 자막을 표시한다.
+// 그림 아래, 쇼츠 재생바·버튼 영역보다 위(style.bottom)에 자막을 표시한다.
 // 자막이 바뀔 때 0.15초 동안 살짝 떠오르며 나타난다.
-export const Subtitle: React.FC<{ cues: Cue[] }> = ({ cues }) => {
+export const Subtitle: React.FC<{ cues: Cue[]; style: SubtitleStyle }> = ({ cues, style }) => {
     const frame = useCurrentFrame();
     const { fps } = useVideoConfig();
     const t = frame / fps;
@@ -17,15 +17,15 @@ export const Subtitle: React.FC<{ cues: Cue[] }> = ({ cues }) => {
     const lift = interpolate(since, [0, 0.15], [12, 0], { extrapolateRight: "clamp" });
 
     return (
-        <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: 80 }}>
+        <AbsoluteFill style={{ justifyContent: "flex-end", alignItems: "center", paddingBottom: style.bottom }}>
             <div
                 style={{
                     maxWidth: 1000,
                     padding: "0 20px",
-                    color: "#111",
-                    fontFamily: "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif",
-                    fontSize: 56,
-                    fontWeight: 800,
+                    color: style.color,
+                    fontFamily: style.font,
+                    fontSize: style.size,
+                    fontWeight: style.weight,
                     lineHeight: 1.35,
                     textAlign: "center",
                     wordBreak: "keep-all",

@@ -52,7 +52,26 @@ def build_props(job_dir: Path) -> dict:
             "duration": probe_duration(video),
             "cues": parse_srt(job_dir / s.subtitle),
         })
-    return {"title": project.title, "fps": project.fps, "scenes": scenes}
+    return {
+        "title": project.title if settings.title_show else "",
+        "fps": project.fps,
+        "scenes": scenes,
+        "style": {
+            "subtitle": {
+                "font": settings.subtitle_font,
+                "size": settings.subtitle_size,
+                "weight": settings.subtitle_weight,
+                "color": settings.subtitle_color,
+                "bottom": settings.subtitle_bottom,
+            },
+            "title": {
+                "font": settings.title_font or settings.subtitle_font,
+                "size": settings.title_size,
+                "color": settings.title_color,
+                "top": settings.title_top,
+            },
+        },
+    }
 
 
 def run(job_dir: Path, force: bool = False) -> dict:

@@ -11,17 +11,20 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from ..config import settings
 from ..schema import Project, Scene
 from ..utils.ffmpeg import probe_duration, run as ffmpeg
 from ..utils.logger import log
 from typing import Optional
 
 WIDTH, HEIGHT = 1080, 1920
-IMAGE_HEIGHT = 1540      # 그림 높이(px). 1920 중 아래쪽 약 270px를 자막 자리로 남긴다
-IMAGE_TOP = 110          # 그림 위쪽 여백(px)
+IMAGE_HEIGHT = settings.image_height  # 그림 높이(px). 위는 제목, 아래는 자막 자리 (기본 1000)
+IMAGE_TOP = settings.image_top        # 그림 위쪽 여백(px) (기본 360)
 MAX_CUE_CHARS = 30       # 자막 한 번에 보여줄 최대 글자 수 (세로 화면 2줄 분량)
 END_PAD = 0.3            # s05에서 음성 끝에 붙인 무음 길이 → 자막 계산에서 제외
-LINE_CHARS = 19          # 자막 한 줄에 들어가는 글자 수 (1080px 폭, 글씨 크기 56, 띄어쓰기 포함)
+# 자막 한 줄에 들어가는 글자 수 (1080px 폭, 글씨 크기 56일 때 19자, 띄어쓰기 포함).
+# SUBTITLE_SIZE를 바꾸면 같은 폭에 맞게 비례해서 늘거나 준다
+LINE_CHARS = max(8, round(19 * 56 / settings.subtitle_size))
 
 
 # ---------- 자막 ----------

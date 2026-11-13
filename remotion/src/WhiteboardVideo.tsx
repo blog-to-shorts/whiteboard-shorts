@@ -1,7 +1,8 @@
 import React from "react";
 import { AbsoluteFill, CalculateMetadataFunction, Series } from "remotion";
 import { SceneClip } from "./components/SceneClip";
-import type { VideoProps } from "./types";
+import { Title } from "./components/Title";
+import { resolveStyle, type VideoProps } from "./types";
 
 const secToFrames = (sec: number, fps: number) => Math.max(1, Math.round(sec * fps));
 
@@ -12,16 +13,19 @@ export const calculateMetadata: CalculateMetadataFunction<VideoProps> = ({ props
     return { fps, durationInFrames: Math.max(durationInFrames, 1) };
 };
 
-export const WhiteboardVideo: React.FC<VideoProps> = ({ scenes, fps }) => {
+export const WhiteboardVideo: React.FC<VideoProps> = ({ scenes, fps, title, style }) => {
+    const st = resolveStyle(style);
     return (
         <AbsoluteFill style={{ backgroundColor: "white" }}>
             <Series>
                 {scenes.map((scene) => (
                     <Series.Sequence key={scene.id} durationInFrames={secToFrames(scene.duration, fps || 30)}>
-                        <SceneClip scene={scene} />
+                        <SceneClip scene={scene} subtitleStyle={st.subtitle} />
                     </Series.Sequence>
                 ))}
             </Series>
+            {/* 제목은 장면이 바뀌어도 영상 내내 상단에 고정 */}
+            {title ? <Title text={title} style={st.title} /> : null}
         </AbsoluteFill>
     );
 };
