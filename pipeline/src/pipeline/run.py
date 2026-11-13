@@ -106,6 +106,8 @@ def invalidate(job_dir: Path, from_step: int, scene_ids: Optional[list[int]] = N
                 rm(job_dir / sc.image)
             if from_step <= 5:
                 rm(job_dir / sc.audio)
+                for f in s05_tts.raw_files(job_dir / sc.audio):  # KEEP_RAW_TTS로 남긴 원본도 함께
+                    rm(f)
             if from_step <= 6:  # 이미지나 음성이 바뀌면 드로잉도 다시
                 rm(job_dir / sc.video)
                 rm(s06_animate.regions_path(job_dir, sc))

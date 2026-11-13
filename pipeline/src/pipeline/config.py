@@ -16,6 +16,17 @@ def _path(key: str, default: str) -> Path:
     return p if p.is_absolute() else (ROOT / p).resolve()
 
 
+def _float(key: str, default: float) -> float:
+    """.env의 숫자 값. 없거나 비어 있으면 default"""
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        raise ValueError(f".env의 {key} 값이 숫자가 아닙니다: {raw!r}") from None
+
+
 @dataclass(frozen=True)
 class Settings:
     # OpenAI
@@ -33,6 +44,11 @@ class Settings:
     # ElevenLabs 1,000자당 가격(USD). 요금제마다 달라서 직접 넣는다. 비우면 비용 '미확인'
     elevenlabs_usd_per_1k_chars: Optional[float] = (
         float(os.getenv("ELEVENLABS_USD_PER_1K_CHARS")) if os.getenv("ELEVENLABS_USD_PER_1K_CHARS") else None)
+    # voice_settings (0~1). 비우면 기본값. 범위는 TTS 호출 직전에 검사한다 (tts/elevenlabs.py)
+    elevenlabs_stability: float = field(default_factory=lambda: _float("ELEVENLABS_STABILITY", 0.5))
+    elevenlabs_similarity: float = field(default_factory=lambda: _float("ELEVENLABS_SIMILARITY", 0.75))
+    # 1이면 ElevenLabs 원본 mp3와 원본 기준 글자 시각(.align.json)을 지우지 않는다 (숨소리 자르기 기준 실험용)
+    keep_raw_tts: bool = os.getenv("KEEP_RAW_TTS", "0") == "1"
 
     # 경로
     jobs_dir: Path = field(default_factory=lambda: _path("JOBS_DIR", "./jobs"))
