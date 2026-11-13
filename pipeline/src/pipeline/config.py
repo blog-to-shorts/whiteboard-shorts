@@ -75,6 +75,7 @@ class Settings:
 
     # 드로잉 순서: GPT가 그림을 보고 "무엇부터 그릴지"를 정한다. 0이면 기본(위→아래) 순서
     draw_order: bool = os.getenv("DRAW_ORDER", "1") != "0"
+    marker_colors: bool = os.getenv("MARKER_COLORS", "1") != "0"
 
     # 대본 수치·조건 원문 대조 검증. 0이면 끔
     fact_check: bool = os.getenv("FACT_CHECK", "1") != "0"
