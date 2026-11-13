@@ -77,13 +77,20 @@ PHONE_DIGITS = "공일이삼사오육칠팔구"  # 전화번호의 0은 '공'
 NATIVE_UNITS = {
     "번째": 99, "살": 99, "시": 24,
     "시간": 20, "달": 20, "배": 20, "개": 20, "명": 20, "마리": 20, "권": 20, "장": 20,
-    "가지": 20, "군데": 20, "문제": 20, "단계": 20, "차례": 20,
+    "가지": 20, "군데": 20, "곳": 20, "문제": 20, "차례": 20,
+}
+# 기본은 한자어지만, 개수를 뜻하는 말이 뒤에 오면 고유어로 읽는 단위 ('번'과 같은 방식, 긴 말부터)
+# 단계: '1단계 필기, 2단계 실기'처럼 순서로 많이 쓰여 기본은 일 단계, '3단계로 나누어'는 세 단계
+CONTEXT_NATIVE_UNITS = {
+    "단계": (20, sorted(["로 나누", "로 나눠", "로 나뉘", "로 나눈", "로 구성", "로 이루어",
+                        "를 거쳐", "를 거치", "를 거친", "에 걸쳐", "에 걸친", "만에", "씩"], key=len, reverse=True)),
 }
 # 한자어로 읽는 단위 (숫자 뒤에 띄어 읽는다)
 SINO_UNITS = [
     "분", "초", "월", "일", "년", "주", "개월", "원", "점", "회", "급", "층", "학점", "세", "위", "차",
     "퍼센트", "개년", "개국", "회차", "회독", "주차", "주년", "일차", "분기", "교시", "학년", "학기", "년도",
     "문항", "과목", "등", "호", "쪽", "페이지", "달러",  # 과목은 '1과목, 2과목'처럼 번호로 많이 쓰여 한자어
+    "단계",  # 기본 한자어, 뒤에 오는 말에 따라 고유어 (CONTEXT_NATIVE_UNITS)
 ]
 # 범위에서 '부터 ~까지'로 읽는 날짜·시각 단위
 TIME_UNITS = {"년", "월", "일", "시", "분", "초", "주차", "회차", "교시", "일차"}
@@ -261,12 +268,25 @@ def _sym_name(sym: str) -> str:
     return next(name for p, name in _SYM_UNITS if re.fullmatch(p, sym))
 
 
-def _kor_term(num: str, unit: str, je: bool = False) -> str:
-    """숫자 + 한글 단위. je=True면 '제3장'처럼 순서를 뜻하므로 한자어"""
+def _native_limit(unit, rest: str = ""):
+    """이 단위를 고유어로 읽는 최대 수. 한자어로 읽으면 None. rest: 단위 바로 뒤의 글"""
+    if unit in NATIVE_UNITS:
+        return NATIVE_UNITS[unit]
+    if unit in CONTEXT_NATIVE_UNITS:
+        limit, words = CONTEXT_NATIVE_UNITS[unit]
+        after = rest[1:] if rest[:1] == " " else rest
+        if any(rest.startswith(w) or after.startswith(w) for w in words):
+            return limit
+    return None
+
+
+def _kor_term(num: str, unit: str, je: bool = False, rest: str = "") -> str:
+    """숫자 + 한글 단위. je=True면 '제3장'처럼 순서를 뜻하므로 한자어. rest: 단위 바로 뒤의 글"""
     if unit == "월" and _int(num) in (6, 10):
         return _month(_int(num))
     v = _int(num)
-    if unit in NATIVE_UNITS and not je and v is not None and 1 <= v <= NATIVE_UNITS[unit]:
+    limit = _native_limit(unit, rest)
+    if limit and not je and v is not None and 1 <= v <= limit:
         if unit == "번째" and v == 1:
             return "첫 번째"
         return f"{read_native(v)} {unit}"
@@ -396,8 +416,10 @@ def analyze(text: str) -> Result:
         if k2 and _CONTINUES.match(rest):
             return m.group(0)  # 9월~2027년 3월처럼 오른쪽이 더 큰 묶음의 일부면 범위로 읽지 않음 (틀리게 읽는 것보다 나음)
 
+        lim2 = _native_limit(k2, rest)
+
         def right() -> str:
-            return _kor_term(n2, k2) if k2 else (_sym_term(n2, s2) if s2 else read_numexpr(n2))
+            return _kor_term(n2, k2, rest=rest) if k2 else (_sym_term(n2, s2) if s2 else read_numexpr(n2))
         tail = f" {k2}" if k2 else (f" {_sym_name(s2)}" if s2 else "")
         # 줄여 쓴 범위: 2~30 → 이삼십, 4~50만 → 사오십만
         if not (k1 or s1) and re.fullmatch(r"\d", n1):
@@ -409,7 +431,7 @@ def analyze(text: str) -> Result:
         a, b = _int(n1), _int(n2)
         # 이어지는 작은 수: 3~4주 → 삼사 주, 2~3개 → 두세 개
         if not (k1 or s1) and a and b and 1 <= a <= 8 and b == a + 1:
-            if k2 in NATIVE_UNITS and k2 != "번째" and b <= NATIVE_UNITS[k2]:
+            if lim2 and k2 != "번째" and b <= lim2:
                 return f"{_NATIVE_PAIR[a]} {k2}"
             return _SINO_PAIR[a] + tail
         # 날짜·시각 단위: 1일~16일 → 일 일부터 십육 일까지 (왼쪽에 단위가 없으면 오른쪽 단위로 읽음)
@@ -420,7 +442,7 @@ def analyze(text: str) -> Result:
             left = _kor_term(n1, k1)
         elif s1:
             left = _sym_term(n1, s1)
-        elif k2 in NATIVE_UNITS and a and 1 <= a <= NATIVE_UNITS[k2] and k2 != "번째":
+        elif lim2 and a and 1 <= a <= lim2 and k2 != "번째":
             left = read_native(a, cardinal=True)
         else:
             left = read_numexpr(n1)
@@ -441,7 +463,8 @@ def analyze(text: str) -> Result:
         return _sym_term(n, s)
     text = _SYM_TERM.sub(sym, text)
     text = _KOR_TERM.sub(lambda m: _kor_term(m.group("n"), m.group("k"),
-                                             je=m.start() > 0 and m.string[m.start() - 1] == "제"), text)
+                                             je=m.start() > 0 and m.string[m.start() - 1] == "제",
+                                             rest=m.string[m.end():]), text)
 
     def beon(m):
         after = m.string[m.end():]
