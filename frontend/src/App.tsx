@@ -97,22 +97,28 @@ export default function App() {
       <div className="app">
         <div className="grain" aria-hidden />
 
-        {/* ---------- 히어로: 거대한 워드마크 + 겹친 영상 ---------- */}
+        {/* ---------- 히어로: 서비스 소개와 영상 미리보기 ---------- */}
         <section className="hero" id="top">
-          <Wordmark {...BRAND.top} className="wm-top" />
+          <div className="hero-copy">
+            <p className="hero-tagline">{BRAND.tagline}</p>
+            <h1 className="wordmark">{BRAND.role}</h1>
+            <p className="hero-description">
+              블로그 글 하나로 대본부터 그림, 내레이션, 자막까지.
+              <br />화이트보드 숏폼을 만들어보세요.
+            </p>
+            <a className="cta hero-start" href="#create">내 블로그로 시작하기 <span aria-hidden>↗</span></a>
+          </div>
+          <div className="hero-preview">
+            <p className="hero-preview-label"><span className="sq" aria-hidden />SHORTS PREVIEW</p>
           <div className="hero-media">
             {latestDone && api.videoUrl(latestDone) ? (
                 <video src={api.videoUrl(latestDone)!} autoPlay muted loop playsInline />
             ) : (
                 <div className="hero-media-empty">첫 영상을 만들면 여기서 재생돼요</div>
             )}
-            {latestDone && <span className="media-tag">{latestDone.title}</span>}
           </div>
-          <Wordmark {...BRAND.bottom} className="wm-bottom" />
-          <span className="sq hero-sq" />
-          <p className="hero-tagline">
-            {BRAND.tagline}
-          </p>
+            {latestDone && <p className="media-tag">{latestDone.title}</p>}
+          </div>
         </section>
 
         {error && <div className="banner" onClick={() => setError(null)}>{error}</div>}
@@ -189,16 +195,6 @@ export default function App() {
             </button>
         )}
       </div>
-  );
-}
-
-function Wordmark({ word, pixel, className }: { word: string; pixel: number[]; className: string }) {
-  return (
-      <h1 className={`wordmark ${className}`} aria-label={word}>
-        {word.split("").map((ch, i) => (
-            <span key={i} className={pixel.includes(i) ? "px" : undefined}>{ch}</span>
-        ))}
-      </h1>
   );
 }
 
