@@ -7,7 +7,12 @@ import { api, FontInfo, Job, JobStyle } from "./api";
 const W = 1080, H = 1920, IMG_TOP = 360, IMG_H = 1000, IMG_W = Math.round((IMG_H * 854) / 1280), SUB_BOTTOM = 400, TITLE_TOP = 150;
 const SCALE = 0.25;
 const DEFAULT_CSS = "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif";
-const DEFAULT: JobStyle = { subtitle_font: "", subtitle_size: 56, title_show: true, title_font: "", title_size: 80 };
+const DEFAULT: JobStyle = {
+  subtitle_font: "", subtitle_size: 56, subtitle_color: "#111111",
+  title_show: true, title_font: "", title_size: 80, title_color: "#111111",
+};
+// 흰 배경에서 잘 보이는 색 몇 가지 (그 밖의 색은 색상 칸에서 직접 고른다)
+const SWATCHES = ["#111111", "#444444", "#f96606", "#e53935", "#1e63d6", "#0f8a5f", "#7b3fbf", "#c2185b"];
 
 // 미리보기에서도 같은 구글 폰트를 쓰도록 필요할 때 불러온다
 function loadGoogleFont(font?: FontInfo) {
@@ -17,7 +22,7 @@ function loadGoogleFont(font?: FontInfo) {
   const link = document.createElement("link");
   link.id = id;
   link.rel = "stylesheet";
-  link.href = `https://fonts.googleapis.com/css2?family=${font.google.replace(/ /g, "+")}&display=swap`;
+  link.href = `https://fonts.googleapis.com/css2?family=${font.google}&display=swap`;
   document.head.appendChild(link);
 }
 
@@ -39,9 +44,40 @@ function wrapSample(text: string, chars: number) {
   return lines.slice(0, 2).join("\n");
 }
 
+// 글꼴 목록을 고딕·명조·제목용·손글씨로 묶어 보여 준다
+function FontOptions({ fonts, skipDefault }: { fonts: FontInfo[]; skipDefault?: boolean }) {
+  const groups: Record<string, FontInfo[]> = {};
+  for (const f of fonts) {
+    if (skipDefault && f.key === "malgun") continue;
+    (groups[f.group] ??= []).push(f);
+  }
+  return (
+      <>
+        {Object.entries(groups).map(([g, list]) => (
+            <optgroup key={g} label={g}>
+              {list.map((f) => <option key={f.key} value={f.key === "malgun" ? "" : f.key}>{f.label}</option>)}
+            </optgroup>
+        ))}
+      </>
+  );
+}
+
+function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  return (
+      <span className="color-row">
+        {SWATCHES.map((c) => (
+            <button key={c} type="button" className={`swatch${c === value ? " on" : ""}`} style={{ background: c }}
+                    aria-label={c} onClick={() => onChange(c)} />
+        ))}
+        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} aria-label="직접 고르기" />
+        <code>{value}</code>
+      </span>
+  );
+}
+
 export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void }) {
   const [fonts, setFonts] = useState<FontInfo[]>([]);
-  const [draft, setDraft] = useState<JobStyle>(job.style ?? DEFAULT);
+  const [draft, setDraft] = useState<JobStyle>({ ...DEFAULT, ...(job.style ?? {}) });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -49,9 +85,10 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
     api.fonts().then(setFonts).catch(() => setFonts([]));
   }, []);
   // 다른 작업을 고르거나 다시 만든 뒤에는 서버 값으로 맞춘다
-  const savedKey = JSON.stringify(job.style ?? DEFAULT);
+  const saved: JobStyle = { ...DEFAULT, ...(job.style ?? {}) };
+  const savedKey = JSON.stringify(saved);
   useEffect(() => {
-    setDraft(job.style ?? DEFAULT);
+    setDraft(saved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [job.job_id, savedKey]);
 
@@ -96,9 +133,9 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
         <div className="style-grid">
           <div className="style-controls">
             <label>
-              <span>자막 글꼴</span>
+              <span>자막 글꼴 <b>{fonts.length}종</b></span>
               <select value={draft.subtitle_font} onChange={(e) => set("subtitle_font", e.target.value)}>
-                {fonts.map((f) => <option key={f.key} value={f.key === "malgun" ? "" : f.key}>{f.label}</option>)}
+                <FontOptions fonts={fonts} />
               </select>
             </label>
             <label>
@@ -106,6 +143,10 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
               <input type="range" min={36} max={96} step={2} value={draft.subtitle_size}
                      onChange={(e) => set("subtitle_size", Number(e.target.value))} />
             </label>
+            <div className="field">
+              <span>자막 색상</span>
+              <ColorPicker value={draft.subtitle_color} onChange={(c) => set("subtitle_color", c)} />
+            </div>
             <label className="check">
               <input type="checkbox" checked={draft.title_show} onChange={(e) => set("title_show", e.target.checked)} />
               <span>상단 제목 표시 (AI가 만든 제목: {job.title ?? "-"})</span>
@@ -116,7 +157,7 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
                     <span>제목 글꼴</span>
                     <select value={draft.title_font} onChange={(e) => set("title_font", e.target.value)}>
                       <option value="">자막과 같게</option>
-                      {fonts.filter((f) => f.key !== "malgun").map((f) => <option key={f.key} value={f.key}>{f.label}</option>)}
+                      <FontOptions fonts={fonts} skipDefault />
                     </select>
                   </label>
                   <label>
@@ -124,6 +165,10 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
                     <input type="range" min={48} max={140} step={2} value={draft.title_size}
                            onChange={(e) => set("title_size", Number(e.target.value))} />
                   </label>
+                  <div className="field">
+                    <span>제목 색상</span>
+                    <ColorPicker value={draft.title_color} onChange={(c) => set("title_color", c)} />
+                  </div>
                 </>
             )}
             {err && <p className="error-box">{err}</p>}
@@ -131,7 +176,7 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
               <span className="hint">
                 {locked ? "영상을 만드는 중이에요" : changed ? "자막·합성만 다시 만들어요 (API 비용 없음)" : "지금 영상과 같아요"}
               </span>
-              <button className="ghost" disabled={!changed || busy} onClick={() => setDraft(job.style ?? DEFAULT)}>되돌리기</button>
+              <button className="ghost" disabled={!changed || busy} onClick={() => setDraft(saved)}>되돌리기</button>
               <button className="cta" disabled={!changed || busy || locked} onClick={apply}>
                 {busy ? "요청 중…" : "이 스타일로 다시 만들기 →"}
               </button>
@@ -140,10 +185,10 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
 
           <div className="style-preview" style={{ width: W * SCALE, height: H * SCALE }} aria-label="자막 미리보기">
             {draft.title_show && (
-                <div className="sp-title" style={{ top: TITLE_TOP * SCALE, fontFamily: titleCss, fontSize: titleSize * SCALE }}>{title}</div>
+                <div className="sp-title" style={{ top: TITLE_TOP * SCALE, fontFamily: titleCss, fontSize: titleSize * SCALE, color: draft.title_color }}>{title}</div>
             )}
             <div className="sp-image" style={{ top: IMG_TOP * SCALE, height: IMG_H * SCALE, width: IMG_W * SCALE }}>그림</div>
-            <div className="sp-sub" style={{ bottom: SUB_BOTTOM * SCALE, fontFamily: subCss, fontSize: draft.subtitle_size * SCALE }}>{sample}</div>
+            <div className="sp-sub" style={{ bottom: SUB_BOTTOM * SCALE, fontFamily: subCss, fontSize: draft.subtitle_size * SCALE, color: draft.subtitle_color }}>{sample}</div>
             <div className="sp-ui" style={{ height: SUB_BOTTOM * SCALE * 0.8 }}>쇼츠 재생바·버튼 영역</div>
           </div>
         </div>

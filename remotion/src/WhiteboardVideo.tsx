@@ -16,8 +16,8 @@ export const calculateMetadata: CalculateMetadataFunction<VideoProps> = ({ props
 
 export const WhiteboardVideo: React.FC<VideoProps> = ({ scenes, fps, title, style }) => {
     const st = resolveStyle(style);
-    useGoogleFont(st.subtitle.font);
-    useGoogleFont(st.title.font);
+    useGoogleFont(st.subtitle.font, st.subtitle.google);
+    useGoogleFont(st.title.font, st.title.google);
     return (
         <AbsoluteFill style={{ backgroundColor: "white" }}>
             <Series>

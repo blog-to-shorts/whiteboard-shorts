@@ -23,6 +23,7 @@ export type SubtitleStyle = {
   weight: number;
   color: string;
   bottom: number; // 화면 아래에서 자막 아랫변까지(px). 쇼츠 재생바 위로 올리는 값
+  google?: string; // 구글 폰트 CSS2 family 값. 비어 있으면 PC 글꼴
 };
 
 export type TitleStyle = {
@@ -30,6 +31,7 @@ export type TitleStyle = {
   size: number; // px. 긴 제목은 자동으로 줄어든다
   color: string;
   top: number; // 화면 위에서 제목 윗변까지(px)
+  google?: string;
 };
 
 export type VideoStyle = {

@@ -1,46 +1,44 @@
 import { useEffect, useState } from "react";
 import { continueRender, delayRender } from "remotion";
 
-// 웹에서 고를 수 있는 구글 폰트 (pipeline/style.py의 FONTS와 이름을 맞춘다). 값 = 불러올 굵기
-const GOOGLE_FONTS: Record<string, string> = {
-    "Noto Sans KR": "wght@400;700;900",
-    "Nanum Gothic": "wght@400;700;800",
-    "Gothic A1": "wght@400;700;800;900",
-    "Nanum Myeongjo": "wght@400;700;800",
-    "Black Han Sans": "",
-    "Do Hyeon": "",
-    "Jua": "",
-    "Gowun Dodum": "",
-    "Nanum Pen Script": "",
-};
-
 const firstFamily = (css: string) => css.split(",")[0].trim().replace(/^['"]|['"]$/g, "");
 
-// font-family 첫 글꼴이 구글 폰트면 내려받을 때까지 렌더를 잠시 멈춘다 (PC에 없는 글꼴도 영상에 똑같이 나오게)
-export const useGoogleFont = (css: string) => {
+// 구글 폰트를 내려받을 때까지 렌더를 잠시 멈춘다 (PC에 없는 글꼴도 영상에 똑같이 나오게).
+// spec은 pipeline/style.py FONTS의 google 값 그대로 (예: "Noto+Sans+KR:wght@400;700;900"). 비어 있으면 PC 글꼴을 쓴다.
+export const useGoogleFont = (css: string, spec?: string) => {
     const name = firstFamily(css);
-    const [handle] = useState(() => (name in GOOGLE_FONTS ? delayRender(`font ${name}`) : null));
+    const [handle] = useState(() => (spec ? delayRender(`font ${name}`) : null));
     useEffect(() => {
-        if (handle === null) return;
-        const id = `gf-${name.replace(/\s+/g, "-")}`;
-        if (!document.getElementById(id)) {
-            const link = document.createElement("link");
-            link.id = id;
+        if (handle === null || !spec) return;
+        const href = `https://fonts.googleapis.com/css2?family=${spec}&display=block`;
+        let link = document.querySelector<HTMLLinkElement>(`link[data-gf="${spec}"]`);
+        if (!link) {
+            link = document.createElement("link");
             link.rel = "stylesheet";
-            const axis = GOOGLE_FONTS[name] ? `:${GOOGLE_FONTS[name]}` : "";
-            link.href = `https://fonts.googleapis.com/css2?family=${encodeURIComponent(name).replace(/%20/g, "+")}${axis}&display=block`;
+            link.href = href;
+            link.dataset.gf = spec;
             document.head.appendChild(link);
         }
-        const done = () => continueRender(handle);
-        const timeout = setTimeout(done, 15000); // 네트워크가 안 되면 기본 글꼴로라도 진행
-        (async () => {
-            for (let i = 0; i < 50 && ![...document.styleSheets].some((s) => s.href?.includes(encodeURIComponent(name).replace(/%20/g, "+"))); i++) {
-                await new Promise((r) => setTimeout(r, 100));
+        let finished = false;
+        const done = () => {
+            if (!finished) {
+                finished = true;
+                continueRender(handle);
             }
-            await Promise.all([document.fonts.load(`400 40px "${name}"`), document.fonts.load(`800 40px "${name}"`)]).catch(() => {});
-            clearTimeout(timeout);
-            done();
-        })();
+        };
+        const timeout = setTimeout(done, 15000); // 네트워크가 안 되면 기본 글꼴로라도 진행
+        const waitCss = new Promise<void>((resolve) => {
+            if (link!.sheet) return resolve();
+            link!.addEventListener("load", () => resolve(), { once: true });
+            link!.addEventListener("error", () => resolve(), { once: true });
+        });
+        waitCss
+            .then(() => Promise.all([document.fonts.load(`400 40px "${name}"`), document.fonts.load(`800 40px "${name}"`)]))
+            .catch(() => undefined)
+            .finally(() => {
+                clearTimeout(timeout);
+                done();
+            });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [handle]);
 };

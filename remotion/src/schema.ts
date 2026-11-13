@@ -24,12 +24,14 @@ export const videoSchema = z.object({
                 weight: z.number().min(100).max(900).step(100),
                 color: zColor(),
                 bottom: z.number().min(0).max(900),
+                google: z.string(),
             }).partial(),
             title: z.object({
                 font: z.string(),
                 size: z.number().min(30).max(160),
                 color: zColor(),
                 top: z.number().min(0).max(600),
+                google: z.string(),
             }).partial(),
         })
         .partial()

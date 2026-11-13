@@ -44,14 +44,17 @@ class JobStyle(BaseModel):
     """자막·제목 모양. 글꼴은 GET /jobs/fonts의 key, 빈 값이면 기본 글꼴"""
     subtitle_font: str = ""
     subtitle_size: int = 56
+    subtitle_color: str = "#111111"  # #RRGGBB
     title_show: bool = True
     title_font: str = ""
     title_size: int = 80
+    title_color: str = "#111111"
 
 
 class FontInfo(BaseModel):
     key: str
     label: str
+    group: str
     css: str
     google: Optional[str] = None
 

@@ -15,12 +15,14 @@ export type SceneEdit = { id: number; narration?: string; subtitle_text?: string
 export type JobStyle = {
   subtitle_font: string; // FontInfo.key, 빈 값 = 기본 글꼴
   subtitle_size: number;
+  subtitle_color: string; // #rrggbb
   title_show: boolean;
   title_font: string;
   title_size: number;
+  title_color: string;
 };
 
-export type FontInfo = { key: string; label: string; css: string; google: string | null };
+export type FontInfo = { key: string; label: string; group: string; css: string; google: string | null };
 
 export type Job = {
   job_id: string;
