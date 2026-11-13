@@ -162,3 +162,23 @@ background:#fff;border:0;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.2)
 .sp-sub{cursor:ns-resize;touch-action:none;user-select:none;z-index:2}
 .sp-sub:hover{outline:1px dashed var(--accent);outline-offset:2px}
 .sp-sub.warn{outline:1px dashed #c62828;outline-offset:2px}
+
+/* office-style color palette */
+.cp{position:relative;display:inline-block}
+.cp-trigger{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.6);border:1px solid var(--ink);padding:5px 10px}
+.cp-current{width:22px;height:22px;border:1px solid rgba(0,0,0,.3)}
+.cp-trigger code{font-size:13px;color:var(--ink)}
+.cp-caret{font-size:11px}
+.cp-pop{position:absolute;z-index:40;top:calc(100% + 6px);left:0;background:#fff;border:1px solid #c8c8c8;box-shadow:0 10px 28px rgba(0,0,0,.18);padding:12px 14px;width:max-content}
+.cp-title{margin:0 0 8px;font-size:14px;font-weight:700;color:#222}
+.cp-row{display:grid;grid-template-columns:repeat(10,22px);gap:6px;margin-bottom:12px}
+.cp-shades{display:grid;grid-template-columns:repeat(10,22px);gap:6px;margin:-4px 0 14px}
+.cp-col{display:flex;flex-direction:column}
+.cp-chip{width:22px;height:22px;padding:0;border:1px solid rgba(0,0,0,.12);cursor:pointer}
+.cp-col .cp-chip{border-top-width:0}
+.cp-col .cp-chip:first-child{border-top-width:1px}
+.cp-chip:hover{outline:2px solid #f0a030;outline-offset:0;position:relative;z-index:1}
+.cp-chip.on{outline:2px solid #d24726;outline-offset:1px;position:relative;z-index:2}
+.cp-more{display:flex;align-items:center;gap:8px;border-top:1px solid #e3e3e3;padding-top:10px;font-size:13px;color:#222;cursor:pointer}
+.cp-more input{width:26px;height:22px;padding:0;border:1px solid #bbb;background:none;cursor:pointer}
+.style-controls .cp-more{flex-direction:row;color:#222;font-size:13px}

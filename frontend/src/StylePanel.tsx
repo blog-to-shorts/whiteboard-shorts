@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, FontInfo, Job, JobStyle } from "./api";
+import { ColorPalette } from "./ColorPalette";
 
 // 자막·제목 모양 고르기. 오른쪽 미리보기는 실제 영상(1080×1920) 배치를 줄여 그린 것이고,
 // "다시 만들기"를 누르면 자막·영상 합성만 다시 해서(API 비용 없음) 영상에 반영한다.
@@ -13,8 +14,6 @@ const DEFAULT: JobStyle = {
   subtitle_font: "", subtitle_size: 56, subtitle_color: "#111111", subtitle_bottom: BOTTOM_DEFAULT,
   title_show: true, title_font: "", title_size: 80, title_color: "#111111",
 };
-// 흰 배경에서 잘 보이는 색 몇 가지 (그 밖의 색은 색상 칸에서 직접 고른다)
-const SWATCHES = ["#111111", "#444444", "#f96606", "#e53935", "#1e63d6", "#0f8a5f", "#7b3fbf", "#c2185b"];
 
 // 미리보기에서도 같은 글꼴을 쓰도록 필요할 때 불러온다 (눈누 폰트는 파일 주소, 구글 폰트는 CSS)
 const loaded = new Set<string>();
@@ -70,19 +69,6 @@ function FontOptions({ fonts, skipDefault }: { fonts: FontInfo[]; skipDefault?: 
             </optgroup>
         ))}
       </>
-  );
-}
-
-function ColorPicker({ value, onChange }: { value: string; onChange: (c: string) => void }) {
-  return (
-      <span className="color-row">
-        {SWATCHES.map((c) => (
-            <button key={c} type="button" className={`swatch${c === value ? " on" : ""}`} style={{ background: c }}
-                    aria-label={c} onClick={() => onChange(c)} />
-        ))}
-        <input type="color" value={value} onChange={(e) => onChange(e.target.value)} aria-label="직접 고르기" />
-        <code>{value}</code>
-      </span>
   );
 }
 
@@ -179,7 +165,7 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
             </label>
             <div className="field">
               <span>자막 색상</span>
-              <ColorPicker value={draft.subtitle_color} onChange={(c) => set("subtitle_color", c)} />
+              <ColorPalette value={draft.subtitle_color} onChange={(c) => set("subtitle_color", c)} />
             </div>
             <label>
               <span>
@@ -216,7 +202,7 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
                   </label>
                   <div className="field">
                     <span>제목 색상</span>
-                    <ColorPicker value={draft.title_color} onChange={(c) => set("title_color", c)} />
+                    <ColorPalette value={draft.title_color} onChange={(c) => set("title_color", c)} />
                   </div>
                 </>
             )}
