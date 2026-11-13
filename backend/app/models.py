@@ -57,6 +57,7 @@ class FontInfo(BaseModel):
     group: str
     css: str
     google: Optional[str] = None
+    url: Optional[str] = None  # 눈누 폰트 파일 주소
 
 
 class JobInfo(BaseModel):

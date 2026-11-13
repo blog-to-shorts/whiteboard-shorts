@@ -22,7 +22,7 @@ export type JobStyle = {
   title_color: string;
 };
 
-export type FontInfo = { key: string; label: string; group: string; css: string; google: string | null };
+export type FontInfo = { key: string; label: string; group: string; css: string; google: string | null; url: string | null };
 
 export type Job = {
   job_id: string;

@@ -2,7 +2,7 @@ import React from "react";
 import { AbsoluteFill, CalculateMetadataFunction, Series } from "remotion";
 import { SceneClip } from "./components/SceneClip";
 import { Title } from "./components/Title";
-import { useGoogleFont } from "./fonts";
+import { useWebFont } from "./fonts";
 import { resolveStyle, type VideoProps } from "./types";
 
 const secToFrames = (sec: number, fps: number) => Math.max(1, Math.round(sec * fps));
@@ -16,8 +16,8 @@ export const calculateMetadata: CalculateMetadataFunction<VideoProps> = ({ props
 
 export const WhiteboardVideo: React.FC<VideoProps> = ({ scenes, fps, title, style }) => {
     const st = resolveStyle(style);
-    useGoogleFont(st.subtitle.font, st.subtitle.google);
-    useGoogleFont(st.title.font, st.title.google);
+    useWebFont(st.subtitle.font, st.subtitle.google, st.subtitle.url);
+    useWebFont(st.title.font, st.title.google, st.title.url);
     return (
         <AbsoluteFill style={{ backgroundColor: "white" }}>
             <Series>

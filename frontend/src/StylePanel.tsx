@@ -14,8 +14,17 @@ const DEFAULT: JobStyle = {
 // 흰 배경에서 잘 보이는 색 몇 가지 (그 밖의 색은 색상 칸에서 직접 고른다)
 const SWATCHES = ["#111111", "#444444", "#f96606", "#e53935", "#1e63d6", "#0f8a5f", "#7b3fbf", "#c2185b"];
 
-// 미리보기에서도 같은 구글 폰트를 쓰도록 필요할 때 불러온다
+// 미리보기에서도 같은 글꼴을 쓰도록 필요할 때 불러온다 (눈누 폰트는 파일 주소, 구글 폰트는 CSS)
+const loaded = new Set<string>();
 function loadGoogleFont(font?: FontInfo) {
+  if (font?.url && !loaded.has(font.key)) {
+    loaded.add(font.key);
+    const name = font.css.split(",")[0].trim().replace(/^'|'$/g, "");
+    new FontFace(name, `url("${encodeURI(font.url)}")`, { weight: "100 900" }).load()
+        .then((f) => document.fonts.add(f))
+        .catch(() => loaded.delete(font.key));
+    return;
+  }
   if (!font?.google) return;
   const id = `gf-${font.key}`;
   if (document.getElementById(id)) return;
@@ -133,7 +142,7 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
         <div className="style-grid">
           <div className="style-controls">
             <label>
-              <span>자막 글꼴 <b>{fonts.length}종</b></span>
+              <span>자막 글꼴 <b>{fonts.length}종</b> · 구글 폰트 {fonts.filter((f) => f.google).length} + 눈누 {fonts.filter((f) => f.url).length}</span>
               <select value={draft.subtitle_font} onChange={(e) => set("subtitle_font", e.target.value)}>
                 <FontOptions fonts={fonts} />
               </select>

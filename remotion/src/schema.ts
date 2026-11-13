@@ -25,6 +25,7 @@ export const videoSchema = z.object({
                 color: zColor(),
                 bottom: z.number().min(0).max(900),
                 google: z.string(),
+                url: z.string(),
             }).partial(),
             title: z.object({
                 font: z.string(),
@@ -32,6 +33,7 @@ export const videoSchema = z.object({
                 color: zColor(),
                 top: z.number().min(0).max(600),
                 google: z.string(),
+                url: z.string(),
             }).partial(),
         })
         .partial()
