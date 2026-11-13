@@ -13,6 +13,7 @@ API 없이 다시 자르기 (.env의 SILENCE_DB·TAIL_SILENCE_DB·KEEP_SEC·FADE
 지운다. 그리는 순서 계획(regions)은 그림 기준이라 남긴다 → 다시 렌더할 때도 API 호출이 없다.
 """
 import json
+import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -29,9 +30,28 @@ from .s08_render import OUTPUT_NAME
 MAX_WORKERS = 2
 
 
+_SPOKEN = re.compile(r"[가-힣A-Za-z0-9]")
+
+
 def raw_files(wav: Path) -> list[Path]:
     """wav 옆에 남기는 원본 파일 (KEEP_RAW_TTS=1일 때). 음성을 다시 만들 때 함께 지운다"""
     return [wav.with_suffix(".mp3"), wav.with_suffix(".align.json")]
+
+
+def last_spoken_end(align: dict | None) -> float | None:
+    """원본 기준 마지막 글자(공백·문장부호 제외)의 끝 시각. 글자별 시각이 없으면 None"""
+    if not align:
+        return None
+    ends = [e for c, e in zip(align["chars"], align["ends"]) if _SPOKEN.match(c)]
+    return ends[-1] if ends else None
+
+
+def _cut_record(info: dict) -> dict:
+    """이번에 쓴 자르기·소리 크기 설정과 결과 (.align.json에 기록)"""
+    from ..utils import ffmpeg as ff
+    return {"silence_db": ff.SILENCE_DB, "tail_silence_db": ff.TAIL_SILENCE_DB, "keep_sec": ff.KEEP_SEC,
+            "fade_sec": ff.FADE_SEC, "tail_sec": ff.TAIL_SEC, "guard_sec": ff.TAIL_GUARD_SEC,
+            "max_tail_sec": ff.TAIL_MAX_SEC, "target_lufs": ff.TARGET_LUFS, "peak_db": ff.PEAK_DB, **info}
 
 
 def _one(job_dir: Path, scene: Scene, prev_text: str, next_text: str) -> tuple[int, int]:
@@ -45,12 +65,14 @@ def _one(job_dir: Path, scene: Scene, prev_text: str, next_text: str) -> tuple[i
     # 영문 약어는 정해진 발음으로 바꿔서 읽힌다 (자막은 원래 표기 유지)
     speech = to_speech(scene.narration)
     align = synthesize(speech, mp3, prev_text=to_speech(prev_text), next_text=to_speech(next_text))
-    trimmed = to_wav(mp3, wav)
+    cut: dict = {}
+    trimmed = to_wav(mp3, wav, speech_end=last_spoken_end(align), info=cut)
     if settings.keep_raw_tts:
         align_path.write_text(json.dumps({
             "text": speech, "trimmed_sec": trimmed, "lead_sec": LEAD_SEC,
             "model_id": settings.elevenlabs_model_id, "voice_id": settings.elevenlabs_voice_id,
             "stability": settings.elevenlabs_stability, "similarity": settings.elevenlabs_similarity,
+            "cut": _cut_record(cut),
             "alignment": align,  # mp3 기준 초. 정렬 정보가 없으면 null
         }, ensure_ascii=False), encoding="utf-8")
     else:
@@ -80,10 +102,7 @@ def retrim(job_dir: Path, only: list[int] | None = None) -> dict:
     missing = [s.id for s in targets if not all(f.exists() for f in raw_files(job_dir / s.audio))]
     if missing:
         raise RuntimeError(f"원본(mp3·.align.json)이 없는 장면: {missing}. KEEP_RAW_TTS=1로 음성을 만든 job만 다시 자를 수 있습니다")
-    from ..utils import ffmpeg as ff  # 실제로 자를 때 쓰는 값 (.env에서 읽은 값)
-    cut = {"silence_db": ff.SILENCE_DB, "tail_silence_db": ff.TAIL_SILENCE_DB,
-           "keep_sec": ff.KEEP_SEC, "fade_sec": ff.FADE_SEC, "tail_sec": ff.TAIL_SEC}
-    removed = []
+    removed, lufs = [], []
     jl = JobLogger(job_dir)
     with jl.step("s05_retrim") as e:
         for s in targets:
@@ -91,10 +110,12 @@ def retrim(job_dir: Path, only: list[int] | None = None) -> dict:
             mp3, align_path = raw_files(wav)
             info = json.loads(align_path.read_text(encoding="utf-8"))
             before = s.duration
-            trimmed = to_wav(mp3, wav)
+            cut: dict = {}
+            trimmed = to_wav(mp3, wav, speech_end=last_spoken_end(info.get("alignment")), info=cut)
             _apply_alignment(s, info.get("alignment"), trimmed)
             s.duration = probe_duration(wav)
-            info.update(trimmed_sec=trimmed, lead_sec=LEAD_SEC, cut=cut)
+            info.update(trimmed_sec=trimmed, lead_sec=LEAD_SEC, cut=_cut_record(cut))
+            lufs.append(cut.get("lufs_after"))
             align_path.write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
             # 음성 길이에 맞춰 만든 산출물만 지운다 (regions는 그림 기준이라 남김)
             for f in (job_dir / s.video, final_video_path(job_dir, s), job_dir / (s.subtitle or "")):
@@ -107,7 +128,8 @@ def retrim(job_dir: Path, only: list[int] | None = None) -> dict:
             out.unlink()
             removed.append(OUTPUT_NAME)
         project.save(path)
-        e.update(scenes=[s.id for s in targets], cut=cut, total_seconds=round(project.total_duration, 2))
+        e.update(scenes=[s.id for s in targets], total_seconds=round(project.total_duration, 2), lufs=lufs,
+                 cut={k: v for k, v in _cut_record({}).items()})
     log.info(f"[s05] 다시 자르기 완료: 장면 {len(targets)}개, 총 {project.total_duration:.1f}초, 지운 파일 {len(removed)}개")
     log.info(f"[s05] 이어서: python -m pipeline.run --job {job_dir.name} --keep-script  (드로잉·자막·렌더만, API 호출 없음)")
     return {"scenes": [s.id for s in targets], "total_seconds": round(project.total_duration, 2), "removed": removed}

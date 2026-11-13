@@ -53,6 +53,64 @@ def test_tail_db_decides_cut():
     assert abs(strict["start"] / SR - 0.18) < 0.03   # 앞은 -45dB 기준 - 여유
 
 
+def _z(s):
+    return np.zeros(int(s * SR), np.float32)
+
+
+def test_guard_protects_speech_end():
+    """dB 기준이 말끝 안쪽에서 끊어도 마지막 글자 끝 + 여유까지는 남긴다"""
+    x = _signal()  # 말소리 0.2~0.7, -40dB 여운 0.7~0.86
+    p = ff.trim_points(x, SR, tail_db=-33, keep=0.02, speech_end=0.80, guard=0.08, max_tail=0.30)
+    assert p["db_end"] / SR < 0.75                       # dB만 보면 0.70에서 끊긴다
+    assert abs(p["end"] / SR - 0.88) < 0.005             # 마지막 글자 끝 0.80 + 여유 0.08
+
+
+def test_max_tail_removes_end_click():
+    """마지막 글자 끝 + 최대 허용 뒤의 짧은 잡음은 dB와 상관없이 자른다 (13-03 같은 경우)"""
+    x = np.concatenate([_z(0.2), _tone(0.5, -13), _z(1.0), _tone(0.02, -20)])  # 말 0.2~0.7, 잡음 1.7초
+    no_align = ff.trim_points(x, SR, tail_db=-33, keep=0.02)
+    with_align = ff.trim_points(x, SR, tail_db=-33, keep=0.02, speech_end=0.70, guard=0.08, max_tail=0.30)
+    assert no_align["end"] / SR > 1.7                    # 글자 시각이 없으면 잡음까지 남는다 (지금 방식)
+    assert abs(with_align["end"] / SR - 0.78) < 0.005    # 잡음은 무시하고 말끝 + 여유에서 자름
+
+
+def test_speech_end_beyond_file_is_clamped():
+    x = np.concatenate([_z(0.2), _tone(0.5, -13), _z(0.05)])  # 파일 길이 0.75초
+    p = ff.trim_points(x, SR, speech_end=0.80, guard=0.08, max_tail=0.30)  # 글자 시각이 파일보다 김
+    assert p["end"] == len(x) and p["speech_end"] == len(x)
+
+
+@needs_ffmpeg
+def test_fade_starts_after_speech_end(tmp_path):
+    x = np.concatenate([_z(0.2), _tone(0.5, -13), _z(0.3)])
+    src = tmp_path / "s.wav"
+    ff._write_wav(src, x, SR)
+    info = {}
+    ff.to_wav(src, tmp_path / "o.wav", speech_end=0.67, guard=0.08, fade=0.04, normalize=False, info=info)
+    assert info["end_sec"] - info["fade_used"] >= info["speech_end_sec"] - 1e-6  # 페이드 시작 ≥ 마지막 글자 끝
+    info2 = {}
+    ff.to_wav(src, tmp_path / "o2.wav", speech_end=0.69, guard=0.02, keep=0.0, tail_db=-33, fade=0.04,
+              normalize=False, info=info2)
+    assert info2["fade_used"] <= info2["end_sec"] - info2["speech_end_sec"] + 1e-6  # 여유가 짧으면 페이드도 짧게
+
+
+@needs_ffmpeg
+def test_loudness_normalized_without_changing_length(tmp_path):
+    x = np.concatenate([_z(0.2), _tone(2.0, -30), _tone(0.01, -2), _tone(1.0, -30), _z(0.3)])  # 조용한 말 + 큰 순간 최대값
+    src = tmp_path / "s.wav"
+    ff._write_wav(src, x, SR)
+    info = {}
+    ff.to_wav(src, tmp_path / "n.wav", target_lufs=-14, info=info)
+    plain = {}
+    ff.to_wav(src, tmp_path / "p.wav", normalize=False, info=plain)
+    y = ff._decode(tmp_path / "n.wav", SR)
+    lufs, peak = ff.measure_lufs(y, SR)
+    assert abs(lufs - (-14)) < 0.5
+    assert peak <= ff.PEAK_DB + 0.5                       # 최대값은 상한 근처까지만
+    assert len(y) == len(ff._decode(tmp_path / "p.wav", SR))  # 길이(시간) 그대로 → 글자 시각 그대로
+    assert info["start_sec"] == plain["start_sec"]
+
+
 @pytest.fixture
 def job(tmp_path, monkeypatch):
     """원본(mp3 + .align.json)을 보관한 장면 1개짜리 job + 음성 이후 산출물"""
@@ -69,7 +127,8 @@ def job(tmp_path, monkeypatch):
     Project(title="t", scenes=[sc]).save(d / "scenes.json")
     (audio / "scene_01.align.json").write_text(json.dumps({
         "text": "가나", "trimmed_sec": 0.0, "lead_sec": ff.LEAD_SEC,
-        "alignment": {"chars": ["가", "나"], "starts": [0.25, 0.5], "ends": [0.5, 0.85]}}), encoding="utf-8")
+        # 마지막 글자 끝 0.6초 → 말끝 보호 구간 0.68~0.90초 안에서 dB 기준에 따라 자르는 위치가 달라진다
+        "alignment": {"chars": ["가", "나"], "starts": [0.25, 0.5], "ends": [0.5, 0.6]}}), encoding="utf-8")
     (audio / "scene_01.wav").write_bytes(b"old")
     for rel in ("videos/scene_01.mp4", "videos/scene_01.1080.mp4", "videos/scene_01.regions.json",
                 "assets/subtitles/scene_01.srt", "output.mp4"):

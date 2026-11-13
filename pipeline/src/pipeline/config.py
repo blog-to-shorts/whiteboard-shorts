@@ -55,6 +55,13 @@ class Settings:
     tail_sec: float = field(default_factory=lambda: _float("TAIL_SEC", 0.25))  # 장면 끝에 붙이는 무음
     keep_sec: float = field(default_factory=lambda: _float("KEEP_SEC", 0.02))  # 소리가 끝난 뒤 남기는 여유
     fade_sec: float = field(default_factory=lambda: _float("FADE_SEC", 0.04))  # 끝 페이드아웃
+    # 글자별 시각이 있을 때: 마지막 글자 끝 + 여유까지는 자르지 않고, + 최대 허용을 넘는 소리(끝 잡음)는 잘라낸다
+    tail_guard_sec: float = field(default_factory=lambda: _float("TAIL_GUARD_SEC", 0.08))
+    tail_max_sec: float = field(default_factory=lambda: _float("TAIL_MAX_SEC", 0.30))
+    # 장면 음성 소리 크기 맞추기 (LUFS). off면 끄기. 최대값(PEAK_DB, dBFS)을 넘는 부분만 짧게 눌러 막는다
+    target_lufs: Optional[float] = field(default_factory=lambda: None if os.getenv("TARGET_LUFS", "").strip().lower() == "off"
+                                         else _float("TARGET_LUFS", -14.0))
+    peak_db: float = field(default_factory=lambda: _float("PEAK_DB", -1.0))
 
     # 경로
     jobs_dir: Path = field(default_factory=lambda: _path("JOBS_DIR", "./jobs"))
