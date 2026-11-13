@@ -149,7 +149,14 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
 
   return (
       <div className="style-panel">
-        <h3><span className="sq" />Subtitle Style<sup>{"{Aa}"}</sup></h3>
+        <div className="block-head">
+          <span className="sq" />
+          <h2>Subtitle Style<sup>{"{02}"}</sup></h2>
+        </div>
+        <p className="style-target">
+          적용할 영상 <b>{job.title ?? job.job_id}</b> <span className="muted">· {job.job_id}</span>
+          <a href="#jobs" className="link-btn">다른 영상 고르기 ↓</a>
+        </p>
         <div className="style-grid">
           <div className="style-controls">
             <label>

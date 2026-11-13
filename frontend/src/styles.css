@@ -133,7 +133,7 @@ background:#fff;border:0;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.2)
 }
 
 /* subtitle style panel */
-.style-panel{margin-top:10vh;max-width:900px}
+.style-panel{max-width:900px}
 .style-panel h3{font-size:26px;margin:0 0 16px;display:flex;align-items:center}
 .style-grid{display:grid;grid-template-columns:1fr auto;gap:32px;align-items:start;border-top:1px solid var(--line);padding-top:18px}
 .style-controls{display:flex;flex-direction:column;gap:16px}
@@ -182,3 +182,8 @@ background:#fff;border:0;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.2)
 .cp-more{display:flex;align-items:center;gap:8px;border-top:1px solid #e3e3e3;padding-top:10px;font-size:13px;color:#222;cursor:pointer}
 .cp-more input{width:26px;height:22px;padding:0;border:1px solid #bbb;background:none;cursor:pointer}
 .style-controls .cp-more{flex-direction:row;color:#222;font-size:13px}
+
+/* New Short 옆에 Subtitle Style을 나란히 (좁은 화면에서는 아래로) */
+.create-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:4vw;align-items:start}
+.style-target{margin:-14px 0 14px;font-size:14px}
+@media (max-width:1200px){.create-split{grid-template-columns:1fr}.create-split .style-panel{margin-top:6vh}}

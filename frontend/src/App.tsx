@@ -117,13 +117,18 @@ export default function App() {
 
         {error && <div className="banner" onClick={() => setError(null)}>{error}</div>}
 
-        {/* ---------- 새 영상 ---------- */}
+        {/* ---------- 새 영상 + 자막 스타일 (선택한 영상) ---------- */}
         <section className="block create-block" id="create">
-          <div className="block-head">
-            <span className="sq" />
-            <h2>New Short<sup>{"{01}"}</sup></h2>
+          <div className="create-split">
+            <div>
+              <div className="block-head">
+                <span className="sq" />
+                <h2>New Short<sup>{"{01}"}</sup></h2>
+              </div>
+              <CreateForm onCreated={onCreated} onError={setError} />
+            </div>
+            {selected && <StylePanel job={selected} onApplied={onRerun} />}
           </div>
-          <CreateForm onCreated={onCreated} onError={setError} />
         </section>
 
         {/* ---------- 작업: 가운데 세로 영상 + 양옆 라벨 ---------- */}
@@ -142,7 +147,6 @@ export default function App() {
               <JobList jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
             </div>
           </div>
-          {selected && <StylePanel job={selected} onApplied={onRerun} />}
           {selected && <Script job={selected} onRerun={onRerun} />}
         </section>
 
