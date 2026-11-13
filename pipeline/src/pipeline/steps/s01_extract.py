@@ -58,40 +58,19 @@ def _fetch(url: str) -> BeautifulSoup:
     return BeautifulSoup(resp.text, "html.parser")
 
 
-def _naver_latest_log_no(blog_id: str) -> Optional[str]:
-    """블로그 홈 주소만 받았을 때: RSS에서 가장 최근 글 번호를 찾는다."""
-    try:
-        resp = requests.get(f"https://rss.blog.naver.com/{blog_id}.xml", headers=HEADERS, timeout=TIMEOUT)
-        resp.raise_for_status()
-    except requests.RequestException:
-        return None
-    for link in re.findall(r"<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</link>", resp.text):
-        m = re.search(rf"blog\.naver\.com/{re.escape(blog_id)}/(\d+)", link)
-        if m:
-            return m.group(1)
-    return None
-
-
 def _naver_postview_url(url: str) -> Optional[str]:
-    """blog.naver.com/{id}/{logNo} 또는 ?blogId=&logNo= 형식을 PostView 주소로 변환.
-    블로그 홈(blog.naver.com/{id})만 주면 가장 최근 글로 바꾼다."""
+    """blog.naver.com/{id}/{logNo} 또는 ?blogId=&logNo= 형식을 PostView 주소로 변환."""
     u = urlparse(url)
     if "blog.naver.com" not in u.netloc:
         return None
     qs = parse_qs(u.query)
-    parts = [p for p in u.path.split("/") if p]
     if "blogId" in qs and "logNo" in qs:
         blog_id, log_no = qs["blogId"][0], qs["logNo"][0]
-    elif len(parts) >= 2 and parts[1].isdigit():
-        blog_id, log_no = parts[0], parts[1]
     else:
-        blog_id = qs["blogId"][0] if "blogId" in qs else (parts[0] if len(parts) == 1 else None)
-        if not blog_id or blog_id.endswith(".naver"):
+        parts = [p for p in u.path.split("/") if p]
+        if len(parts) < 2 or not parts[1].isdigit():
             return None
-        log_no = _naver_latest_log_no(blog_id)
-        if not log_no:
-            return None
-        log.info(f"[s01] 블로그 홈 주소라서 최근 글({blog_id}/{log_no})로 만듭니다")
+        blog_id, log_no = parts[0], parts[1]
     return f"https://blog.naver.com/PostView.naver?blogId={blog_id}&logNo={log_no}"
 
 

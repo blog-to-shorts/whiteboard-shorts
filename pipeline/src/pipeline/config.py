@@ -26,9 +26,7 @@ class Settings:
     image_quality: str = os.getenv("OPENAI_IMAGE_QUALITY", "medium")  # low | medium | high
 
     # TTS
-    tts_engine: str = os.getenv("TTS_ENGINE", "elevenlabs")  # elevenlabs | edge(무료) | silent(음성 없음)
-    edge_voice: str = os.getenv("EDGE_VOICE", "ko-KR-SunHiNeural")  # 남성: ko-KR-InJoonNeural
-    edge_rate: str = os.getenv("EDGE_RATE", "+8%")
+    tts_engine: str = os.getenv("TTS_ENGINE", "elevenlabs")
     elevenlabs_api_key: str = os.getenv("ELEVENLABS_API_KEY", "")
     elevenlabs_voice_id: str = os.getenv("ELEVENLABS_VOICE_ID", "")
     elevenlabs_model_id: str = os.getenv("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2")
