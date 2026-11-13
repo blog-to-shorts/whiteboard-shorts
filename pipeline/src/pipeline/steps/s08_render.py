@@ -6,9 +6,11 @@
 """
 import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
+from .. import style as job_style
 from ..config import settings
 from ..schema import Project
 from ..utils.ffmpeg import probe_duration
@@ -52,25 +54,13 @@ def build_props(job_dir: Path) -> dict:
             "duration": probe_duration(video),
             "cues": parse_srt(job_dir / s.subtitle),
         })
+    # 자막·제목 모양: .env 기본값 + 웹에서 고른 값(jobs/<id>/style.json)
+    show_title = job_style.load(job_dir)["title_show"]
     return {
-        "title": project.title if settings.title_show else "",
+        "title": project.title if show_title else "",
         "fps": project.fps,
         "scenes": scenes,
-        "style": {
-            "subtitle": {
-                "font": settings.subtitle_font,
-                "size": settings.subtitle_size,
-                "weight": settings.subtitle_weight,
-                "color": settings.subtitle_color,
-                "bottom": settings.subtitle_bottom,
-            },
-            "title": {
-                "font": settings.title_font or settings.subtitle_font,
-                "size": settings.title_size,
-                "color": settings.title_color,
-                "top": settings.title_top,
-            },
-        },
+        "style": job_style.remotion_style(job_dir),
     }
 
 
@@ -85,7 +75,8 @@ def run(job_dir: Path, force: bool = False) -> dict:
     props_path.write_text(json.dumps(build_props(job_dir), ensure_ascii=False, indent=2), encoding="utf-8")
 
     cmd = [
-        "npx", "remotion", "render", "src/index.ts", COMPOSITION_ID, str(out),
+        # Windows에서는 npx가 npx.cmd라서 셸 없이 부르면 찾지 못한다 → 실제 경로로 바꿔 부른다
+        shutil.which("npx") or "npx", "remotion", "render", "src/index.ts", COMPOSITION_ID, str(out),
         f"--props={props_path}",
         f"--public-dir={job_dir}",
         "--codec=h264",

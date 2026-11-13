@@ -12,6 +12,16 @@ export type Scene = {
 
 export type SceneEdit = { id: number; narration?: string; subtitle_text?: string; image_prompt?: string };
 
+export type JobStyle = {
+  subtitle_font: string; // FontInfo.key, 빈 값 = 기본 글꼴
+  subtitle_size: number;
+  title_show: boolean;
+  title_font: string;
+  title_size: number;
+};
+
+export type FontInfo = { key: string; label: string; css: string; google: string | null };
+
 export type Job = {
   job_id: string;
   status: JobStatus;
@@ -25,6 +35,7 @@ export type Job = {
   video_url: string | null;
   error: string | null;
   queue_position: number | null;
+  style: JobStyle | null;
 };
 
 const BASE = "/api";
@@ -50,6 +61,9 @@ export const api = {
   get: (id: string) => call<Job>(`/jobs/${id}`),
   rerun: (id: string, edits: SceneEdit[]) =>
       call<Job>(`/jobs/${id}/rerun`, { method: "POST", body: JSON.stringify({ edits }) }),
+  fonts: () => call<FontInfo[]>("/jobs/fonts"),
+  setStyle: (id: string, style: JobStyle) =>
+      call<Job>(`/jobs/${id}/style`, { method: "PUT", body: JSON.stringify(style) }),
   videoUrl: (job: Job) => (job.video_url ? BASE + job.video_url : null),
   downloadUrl: (job: Job) => (job.video_url ? `${BASE}${job.video_url}&download=true` : null),
 };

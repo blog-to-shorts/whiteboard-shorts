@@ -12,6 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from ..config import settings
+from .. import style as job_style
 from ..schema import Project, Scene
 from ..utils.ffmpeg import probe_duration, run as ffmpeg
 from ..utils.logger import log
@@ -24,7 +25,7 @@ MAX_CUE_CHARS = 30       # 자막 한 번에 보여줄 최대 글자 수 (세로
 END_PAD = 0.3            # s05에서 음성 끝에 붙인 무음 길이 → 자막 계산에서 제외
 # 자막 한 줄에 들어가는 글자 수 (1080px 폭, 글씨 크기 56일 때 19자, 띄어쓰기 포함).
 # SUBTITLE_SIZE를 바꾸면 같은 폭에 맞게 비례해서 늘거나 준다
-LINE_CHARS = max(8, round(19 * 56 / settings.subtitle_size))
+LINE_CHARS = job_style.line_chars(settings.subtitle_size)  # job마다 웹에서 고른 크기가 있으면 run()에서 다시 계산
 
 
 # ---------- 자막 ----------
@@ -151,7 +152,7 @@ def _cue_starts_from_speech(text: str, cues: list[str], speech_text: Optional[st
 
 
 def build_srt(narration: str, duration: float, speech_text: Optional[str] = None,
-              char_times: Optional[list[list[float]]] = None) -> str:
+              char_times: Optional[list[list[float]]] = None, line_chars: int = LINE_CHARS) -> str:
     """자막 큐마다 표시 시간을 정해 SRT 문자열 생성.
     글자별 발화 시각이 있으면 실제 말에 맞추고, 없으면 글자 수 비율(공백 제외)로 나눈다.
     첫 자막은 장면 시작부터, 마지막 자막은 장면 끝까지 유지해 자막이 비는 순간이 없게 한다."""
@@ -205,13 +206,14 @@ def run(job_dir: Path, only: list[int] | None = None) -> dict:
         for s in targets:
             final_video_path(job_dir, s).unlink(missing_ok=True)
 
-    # 자막은 계산이 가벼우므로 매번 다시 쓴다 (대본 수정 시 바로 반영)
+    # 자막은 계산이 가벼우므로 매번 다시 쓴다 (대본·자막 크기 수정 시 바로 반영)
+    chars = job_style.line_chars(job_style.load(job_dir)["subtitle_size"])
     for s in targets:
         if s.duration is None:
             raise ValueError(f"scene {s.id}: duration이 없습니다. s05를 먼저 실행하세요.")
         srt = job_dir / s.subtitle
         srt.parent.mkdir(parents=True, exist_ok=True)
-        srt.write_text(build_srt(s.subtitle_text or s.narration, s.duration, s.speech_text, s.char_times),
+        srt.write_text(build_srt(s.subtitle_text or s.narration, s.duration, s.speech_text, s.char_times, chars),
                        encoding="utf-8")
 
     with ThreadPoolExecutor(max_workers=2) as ex:

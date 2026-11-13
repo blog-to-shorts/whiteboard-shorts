@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { StylePanel } from "./StylePanel";
 import { api, Job, JobStatus, Scene, STEP_LABELS, STEP_ORDER } from "./api";
 
 // ---------- 사이트 이름: 여기만 바꾸면 워드마크·탭 제목이 함께 바뀐다 ----------
@@ -141,6 +142,7 @@ export default function App() {
               <JobList jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
             </div>
           </div>
+          {selected && <StylePanel job={selected} onApplied={onRerun} />}
           {selected && <Script job={selected} onRerun={onRerun} />}
         </section>
 

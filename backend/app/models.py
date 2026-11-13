@@ -40,6 +40,22 @@ class SceneInfo(BaseModel):
     duration: Optional[float] = None
 
 
+class JobStyle(BaseModel):
+    """자막·제목 모양. 글꼴은 GET /jobs/fonts의 key, 빈 값이면 기본 글꼴"""
+    subtitle_font: str = ""
+    subtitle_size: int = 56
+    title_show: bool = True
+    title_font: str = ""
+    title_size: int = 80
+
+
+class FontInfo(BaseModel):
+    key: str
+    label: str
+    css: str
+    google: Optional[str] = None
+
+
 class JobInfo(BaseModel):
     job_id: str
     status: JobStatus
@@ -53,6 +69,7 @@ class JobInfo(BaseModel):
     video_url: Optional[str] = None
     error: Optional[str] = None
     queue_position: Optional[int] = None   # 대기 중일 때 앞에 남은 작업 수
+    style: Optional[JobStyle] = None       # 자막·제목 모양 (기본값 + 웹에서 고른 값)
 
 class SceneEdit(BaseModel):
     """장면 하나의 수정 내용. 바꾸지 않을 항목은 비워 둔다."""
