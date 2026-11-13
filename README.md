@@ -132,7 +132,7 @@ python -c "import json,sys; [print(s['id'], s['narration']) for s in json.load(o
 | 수치 검증·이미지 흑백 후처리 켜기/끄기 | `.env`의 `FACT_CHECK`, `IMAGE_GRAYSCALE` |
 | 영문 약어·숫자 발음 | `pipeline/src/pipeline/utils/pronounce.py` (`PRONUNCIATIONS` 사전) |
 | 장면 사이 무음·숨소리 제거 기준 | `pipeline/src/pipeline/utils/ffmpeg.py` (`TAIL_SILENCE_DB` 등) |
-| 성우 | `.env`의 `ELEVENLABS_VOICE_ID` |
+| 성우 | `.env`의 `ELEVENLABS_VOICE_ID` (무료 음성은 `TTS_ENGINE=edge` + `EDGE_VOICE`) |
 | 영상 길이·장면 수·글자 수 | `pipeline/src/pipeline/config.py` |
 | 웹 화면 | `frontend/src/App.tsx`, `styles.css` |
 
@@ -144,6 +144,7 @@ python -c "import json,sys; [print(s['id'], s['narration']) for s in json.load(o
 | `command not found: uvicorn` | 가상환경을 켰는지 확인 (`source pipeline/.venv/bin/activate`) |
 | 프론트에서 `ECONNREFUSED` | 백엔드를 먼저 켜고 새로고침 |
 | ElevenLabs `402` | 무료 요금제는 Voice Library 목소리를 API로 못 씀 → 기본(premade) 목소리 ID 사용 |
+| ElevenLabs `401 quota_exceeded` | 월 크레딧 소진 → `.env`에 `TTS_ENGINE=edge`(무료 Edge 음성) 또는 `TTS_ENGINE=silent`(음성 없이)로 바꿔 실행 |
 | 명령에 `<job_id>`를 그대로 입력해 오류 | `ls jobs`로 실제 job 이름을 확인해 바꿔 넣기 |
 
 ## 7. 폴더 구조

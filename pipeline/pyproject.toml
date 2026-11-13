@@ -13,6 +13,7 @@ dependencies = [
     "numpy>=2.4.6",
     "fastapi>=0.162.2",
     "uvicorn[standard]>=0.54.0",
+    "edge-tts>=7.3.1",
 ]
 
 [project.optional-dependencies]
