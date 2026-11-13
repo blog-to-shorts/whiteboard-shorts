@@ -62,6 +62,8 @@ class Settings:
     target_lufs: Optional[float] = field(default_factory=lambda: None if os.getenv("TARGET_LUFS", "").strip().lower() == "off"
                                          else _float("TARGET_LUFS", -14.0))
     peak_db: float = field(default_factory=lambda: _float("PEAK_DB", -1.0))
+    # 자막을 실제 말보다 먼저 띄우는 시간(초). 기본 0 (첫 자막은 항상 장면 시작)
+    subtitle_lead_sec: float = field(default_factory=lambda: _float("SUBTITLE_LEAD_SEC", 0.0))
 
     # 경로
     jobs_dir: Path = field(default_factory=lambda: _path("JOBS_DIR", "./jobs"))
