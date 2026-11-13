@@ -131,7 +131,7 @@ python -c "import json,sys; [print(s['id'], s['narration']) for s in json.load(o
 | 그림 속 글자 금지어 | `pipeline/src/pipeline/prompts/image_text_words.txt` |
 | 수치 검증·이미지 흑백 후처리 켜기/끄기 | `.env`의 `FACT_CHECK`, `IMAGE_GRAYSCALE` |
 | 영문 약어·숫자 발음 | `pipeline/src/pipeline/utils/pronounce.py` (`PRONUNCIATIONS` 사전) |
-| 장면 사이 무음·숨소리 제거 기준 | `pipeline/src/pipeline/utils/ffmpeg.py` (`TAIL_SILENCE_DB` 등) |
+| 장면 사이 무음·숨소리 제거 기준 | `.env`의 `SILENCE_DB`, `TAIL_SILENCE_DB`, `TAIL_SEC`, `KEEP_SEC`, `FADE_SEC` (바꾼 뒤 `python -m pipeline.steps.s05_tts jobs/<job> --retrim`으로 API 없이 다시 자르기, `KEEP_RAW_TTS=1`로 만든 job만) |
 | 성우 | `.env`의 `ELEVENLABS_VOICE_ID` |
 | 영상 길이·장면 수·글자 수 | `pipeline/src/pipeline/config.py` |
 | 웹 화면 | `frontend/src/App.tsx`, `styles.css` |

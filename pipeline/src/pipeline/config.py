@@ -49,6 +49,12 @@ class Settings:
     elevenlabs_similarity: float = field(default_factory=lambda: _float("ELEVENLABS_SIMILARITY", 0.75))
     # 1이면 ElevenLabs 원본 mp3와 원본 기준 글자 시각(.align.json)을 지우지 않는다 (숨소리 자르기 기준 실험용)
     keep_raw_tts: bool = os.getenv("KEEP_RAW_TTS", "0") == "1"
+    # 장면 음성 앞뒤 무음 자르기 (utils/ffmpeg.py의 to_wav). 비우면 기본값
+    silence_db: float = field(default_factory=lambda: _float("SILENCE_DB", -45.0))  # 앞: 이보다 작으면 무음
+    tail_silence_db: float = field(default_factory=lambda: _float("TAIL_SILENCE_DB", -33.0))  # 끝: 숨소리까지 무음으로
+    tail_sec: float = field(default_factory=lambda: _float("TAIL_SEC", 0.25))  # 장면 끝에 붙이는 무음
+    keep_sec: float = field(default_factory=lambda: _float("KEEP_SEC", 0.02))  # 소리가 끝난 뒤 남기는 여유
+    fade_sec: float = field(default_factory=lambda: _float("FADE_SEC", 0.04))  # 끝 페이드아웃
 
     # 경로
     jobs_dir: Path = field(default_factory=lambda: _path("JOBS_DIR", "./jobs"))

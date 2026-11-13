@@ -4,6 +4,13 @@
   scene_01.mp3         원본 음성
   scene_01.align.json  원본(mp3) 기준 글자별 발화 시각 + 그때 wav로 자르며 앞에서 잘라 낸 길이
 scenes.json의 char_times는 잘라 낸 wav 기준이라, 다른 기준으로 다시 자르려면 원본 기준 시각이 필요하다.
+
+API 없이 다시 자르기 (.env의 SILENCE_DB·TAIL_SILENCE_DB·KEEP_SEC·FADE_SEC·TAIL_SEC를 바꾼 뒤):
+  python -m pipeline.steps.s05_tts jobs/<job> --retrim         # 전체 장면
+  python -m pipeline.steps.s05_tts jobs/<job> 2 3 --retrim     # 2·3번 장면만
+  python -m pipeline.run --job <job> --keep-script              # 이어서 드로잉·자막·렌더(6~8단계)만 다시
+보관한 원본으로 wav와 char_times를 다시 만들고, 음성 길이에 맞춘 산출물(드로잉 영상·변환 영상·자막·최종 영상)만
+지운다. 그리는 순서 계획(regions)은 그림 기준이라 남긴다 → 다시 렌더할 때도 API 호출이 없다.
 """
 import json
 from concurrent.futures import ThreadPoolExecutor
@@ -13,8 +20,10 @@ from ..config import settings
 from ..schema import Project, Scene
 from ..tts import synthesize
 from ..utils.ffmpeg import LEAD_SEC, probe_duration, to_wav
-from ..utils.logger import log
+from ..utils.logger import JobLogger, log
 from ..utils.pronounce import to_speech
+from .s07_subtitle import final_video_path
+from .s08_render import OUTPUT_NAME
 
 # ElevenLabs 무료·저가 플랜은 동시 요청 수 제한이 낮아서 2개까지만
 MAX_WORKERS = 2
@@ -46,7 +55,13 @@ def _one(job_dir: Path, scene: Scene, prev_text: str, next_text: str) -> tuple[i
         }, ensure_ascii=False), encoding="utf-8")
     else:
         mp3.unlink(missing_ok=True)
-    # 글자별 발화 시각을 wav 기준으로 옮겨 저장 (앞 무음을 잘라 낸 만큼 당기고, 붙인 무음만큼 민다)
+    _apply_alignment(scene, align, trimmed)
+    log.info(f"[s05] scene {scene.id:02d} 음성 저장")
+    return scene.id, len(scene.narration)
+
+
+def _apply_alignment(scene: Scene, align: dict | None, trimmed: float) -> None:
+    """글자별 발화 시각을 wav 기준으로 옮겨 저장 (앞 무음을 잘라 낸 만큼 당기고, 붙인 무음만큼 민다)"""
     if align:
         shift = LEAD_SEC - trimmed
         scene.speech_text = "".join(align["chars"])
@@ -54,8 +69,48 @@ def _one(job_dir: Path, scene: Scene, prev_text: str, next_text: str) -> tuple[i
                             for a, b in zip(align["starts"], align["ends"])]
     else:
         scene.speech_text, scene.char_times = None, None
-    log.info(f"[s05] scene {scene.id:02d} 음성 저장")
-    return scene.id, len(scene.narration)
+
+
+def retrim(job_dir: Path, only: list[int] | None = None) -> dict:
+    """보관한 원본(mp3 + .align.json)을 지금 자르기 설정으로 다시 잘라 wav·char_times·duration을 고친다.
+    API를 호출하지 않는다. 원본이 없는 장면이 있으면 아무것도 바꾸지 않고 오류."""
+    path = job_dir / "scenes.json"
+    project = Project.load(path)
+    targets = [s for s in project.scenes if only is None or s.id in only]
+    missing = [s.id for s in targets if not all(f.exists() for f in raw_files(job_dir / s.audio))]
+    if missing:
+        raise RuntimeError(f"원본(mp3·.align.json)이 없는 장면: {missing}. KEEP_RAW_TTS=1로 음성을 만든 job만 다시 자를 수 있습니다")
+    from ..utils import ffmpeg as ff  # 실제로 자를 때 쓰는 값 (.env에서 읽은 값)
+    cut = {"silence_db": ff.SILENCE_DB, "tail_silence_db": ff.TAIL_SILENCE_DB,
+           "keep_sec": ff.KEEP_SEC, "fade_sec": ff.FADE_SEC, "tail_sec": ff.TAIL_SEC}
+    removed = []
+    jl = JobLogger(job_dir)
+    with jl.step("s05_retrim") as e:
+        for s in targets:
+            wav = job_dir / s.audio
+            mp3, align_path = raw_files(wav)
+            info = json.loads(align_path.read_text(encoding="utf-8"))
+            before = s.duration
+            trimmed = to_wav(mp3, wav)
+            _apply_alignment(s, info.get("alignment"), trimmed)
+            s.duration = probe_duration(wav)
+            info.update(trimmed_sec=trimmed, lead_sec=LEAD_SEC, cut=cut)
+            align_path.write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
+            # 음성 길이에 맞춰 만든 산출물만 지운다 (regions는 그림 기준이라 남김)
+            for f in (job_dir / s.video, final_video_path(job_dir, s), job_dir / (s.subtitle or "")):
+                if f.is_file():
+                    f.unlink()
+                    removed.append(str(f.relative_to(job_dir)))
+            log.info(f"[s05] scene {s.id:02d} 다시 자름: {before}초 → {s.duration}초")
+        out = job_dir / OUTPUT_NAME
+        if out.exists():
+            out.unlink()
+            removed.append(OUTPUT_NAME)
+        project.save(path)
+        e.update(scenes=[s.id for s in targets], cut=cut, total_seconds=round(project.total_duration, 2))
+    log.info(f"[s05] 다시 자르기 완료: 장면 {len(targets)}개, 총 {project.total_duration:.1f}초, 지운 파일 {len(removed)}개")
+    log.info(f"[s05] 이어서: python -m pipeline.run --job {job_dir.name} --keep-script  (드로잉·자막·렌더만, API 호출 없음)")
+    return {"scenes": [s.id for s in targets], "total_seconds": round(project.total_duration, 2), "removed": removed}
 
 
 def run(job_dir: Path, only: list[int] | None = None) -> dict:
@@ -105,8 +160,12 @@ def run(job_dir: Path, only: list[int] | None = None) -> dict:
 if __name__ == "__main__":
     # 단독 테스트: python -m pipeline.steps.s05_tts jobs/test01
     # 특정 장면만 다시: python -m pipeline.steps.s05_tts jobs/test01 3
-    import sys
+    # API 없이 다시 자르기: python -m pipeline.steps.s05_tts jobs/test01 --retrim
+    import argparse
 
-    job = Path(sys.argv[1])
-    only = [int(x) for x in sys.argv[2:]] or None
-    print(run(job, only))
+    p = argparse.ArgumentParser(description="STEP 05 음성 (단독 실행)")
+    p.add_argument("job", type=Path, help="job 폴더 (예: jobs/test01)")
+    p.add_argument("scenes", type=int, nargs="*", help="이 장면만 (생략하면 전체)")
+    p.add_argument("--retrim", action="store_true", help="보관한 원본으로 다시 자르기만 (API 호출 없음)")
+    a = p.parse_args()
+    print((retrim if a.retrim else run)(a.job, a.scenes or None))
