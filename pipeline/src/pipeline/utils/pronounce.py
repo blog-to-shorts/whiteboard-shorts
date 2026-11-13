@@ -233,8 +233,10 @@ _COLON = re.compile(r"(?<![\d:])(\d+)(\s*):(\s*)(\d+)(?![\d:])")
 _RATIO_CONTEXT = re.compile(r"(경쟁률|비율|배율|대비)\s*(은|는|이|가)?\s*$")
 _DOLLAR = re.compile(rf"[$＄]\s?({_NUM})")
 _WON = re.compile(rf"[₩￦]\s?({_NUM})")
-_COMPOUND = r"\d{1,2}월\s?\d{1,2}일|\d{1,2}시\s?\d{1,2}분"
-_COMPOUND_RANGE = re.compile(_NB + rf"({_COMPOUND})\s*[~∼〜]\s*({_COMPOUND}|\d{{1,2}}(?:일|시|분))(?!\d)")
+# 여러 단위가 묶인 날짜·시각: 2026년 9월 1일, 9월 1일, 9시 30분
+_COMPOUND = r"\d{4}년\s?\d{1,2}월(?:\s?\d{1,2}일)?|\d{1,2}월\s?\d{1,2}일|\d{1,2}시\s?\d{1,2}분"
+_COMPOUND_RANGE = re.compile(_NB + rf"({_COMPOUND})\s*[~∼〜]\s*({_COMPOUND}|\d{{1,2}}(?:월|일|시|분))(?!\d)")
+_CONTINUES = re.compile(r"\s?\d")  # 범위 오른쪽 뒤에 숫자가 이어지면(2027년 3월) 더 큰 묶음의 일부
 
 
 def _term_re(i: int) -> str:
@@ -391,6 +393,8 @@ def analyze(text: str) -> Result:
         rest = m.string[m.end():]
         if not (k2 or s2) and rest[:1].isalpha() and rest[:1].isascii():
             return m.group(0)  # 3~5G 같은 영문 조합은 범위로 보지 않음
+        if k2 and _CONTINUES.match(rest):
+            return m.group(0)  # 9월~2027년 3월처럼 오른쪽이 더 큰 묶음의 일부면 범위로 읽지 않음 (틀리게 읽는 것보다 나음)
 
         def right() -> str:
             return _kor_term(n2, k2) if k2 else (_sym_term(n2, s2) if s2 else read_numexpr(n2))
