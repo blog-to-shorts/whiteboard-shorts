@@ -13,6 +13,12 @@
   python -m pipeline.run --job test01 --from-step 7              # 자막·렌더만 다시 (API 비용 없음)
   단계 번호: 1 추출 · 2 분석 · 3 대본 · 4 이미지 · 5 음성 · 6 드로잉 · 7 자막·변환 · 8 렌더
 
+중간 단계까지만 실행 (실행 순서 1·2·3·5·4·6·7·8 기준으로 멈춤)
+  python -m pipeline.run --url "..." --to-step 3                 # 대본까지만 (음성·이미지 비용 없음)
+  python -m pipeline.run --job test01                            # 멈춘 곳부터 끝까지 이어서
+  python -m pipeline.run --job test01 --keep-script              # 이어서 실행하되 직접 고친 대본은 유지
+  --keep-script: 음성 길이가 30~60초를 벗어나도 대본을 다시 만들지 않고 경고만 남긴다
+
 각 단계는 결과 파일이 이미 있으면 건너뛰므로, 중간에 실패해도 같은 job으로 다시 실행하면
 실패한 단계부터 이어서 진행된다. 단계별 소요 시간·사용량·오류는 jobs/{id}/log.json에 남는다.
 """
@@ -31,8 +37,27 @@ from .utils import cost
 from .utils.logger import JobLogger, log
 
 
+# 실제 실행 순서: 음성(5)을 이미지(4)보다 먼저 만들어 길이를 확인한다 (run() 참고)
+EXEC_ORDER = [1, 2, 3, 5, 4, 6, 7, 8]
+STEP_NAMES = {1: "추출", 2: "분석", 3: "대본", 4: "이미지", 5: "음성", 6: "드로잉", 7: "자막·변환", 8: "렌더"}
+
+
 def new_job_id() -> str:
     return datetime.now().strftime("%Y%m%d-%H%M%S")
+
+
+def check_step_range(from_step: Optional[int], to_step: Optional[int]) -> None:
+    """to_step이 1~8이 아니거나, 실행 순서상 from_step보다 앞이면 ValueError"""
+    if to_step is not None and to_step not in EXEC_ORDER:
+        raise ValueError(f"--to-step은 1~8이어야 합니다: {to_step}")
+    if from_step and to_step and EXEC_ORDER.index(to_step) < EXEC_ORDER.index(from_step):
+        raise ValueError(f"실행 순서상 --to-step 값이 --from-step 값보다 앞입니다 "
+                         f"(from {from_step}, to {to_step} / 실행 순서: {'·'.join(map(str, EXEC_ORDER))})")
+
+
+def _log_cost(c: dict) -> None:
+    unpriced = f" (단가 미확인: {', '.join(c['unpriced_steps'])})" if c["unpriced_steps"] else ""
+    log.info(f"API 비용(누적): ${c['total_usd']:.3f}{unpriced}")
 
 
 def _length_feedback(job_dir: Path) -> tuple[str, int]:
@@ -102,9 +127,18 @@ def run(
         from_step: Optional[int] = None,
         scene_ids: Optional[list[int]] = None,
         regen_script: bool = True,
+        to_step: Optional[int] = None,
 ) -> Path:
     """regen_script=False: 음성 길이가 범위를 벗어나도 대본을 다시 만들지 않고 경고만 남긴다
-    (웹에서 사람이 고친 대본을 덮어쓰지 않기 위해)"""
+    (웹에서 사람이 고친 대본을 덮어쓰지 않기 위해)
+    to_step: 실행 순서(EXEC_ORDER)상 이 단계까지만 실행하고 멈춘다. 3이면 음성·이미지 모두 실행하지 않는다.
+    None 또는 8이면 끝까지 실행"""
+    check_step_range(from_step, to_step)
+    partial = to_step is not None and to_step != EXEC_ORDER[-1]
+
+    def want(step: int) -> bool:
+        return not partial or EXEC_ORDER.index(step) <= EXEC_ORDER.index(to_step)
+
     job_id = job_id or new_job_id()
     job_dir = settings.jobs_dir / job_id
     job_dir.mkdir(parents=True, exist_ok=True)
@@ -114,68 +148,87 @@ def run(
         log.info(f"[run] {from_step}단계부터 다시 생성 ({target}): 파일 {len(removed)}개 삭제")
     jl = JobLogger(job_dir)
     jl.data.update({"job_id": job_id, "started_at": datetime.now().isoformat()})
+    jl.data.pop("stopped_after", None)  # 이전 실행에서 중간에 멈췄던 기록은 지운다
     if url:  # 기존 job을 다시 돌릴 때 저장된 원문 URL을 지우지 않도록
         jl.data["source_url"] = url
-    log.info(f"===== job {job_id} 시작 → {job_dir} =====")
+    until = f" ({to_step}단계 {STEP_NAMES[to_step]}까지)" if partial else ""
+    log.info(f"===== job {job_id} 시작{until} → {job_dir} =====")
     t_start = time.time()
 
     try:
-        with jl.step("s01_extract") as e:
-            ext = s01_extract.run(job_dir, url=url, text=text)
-            e["chars"] = len(ext.text)
+        if want(1):
+            with jl.step("s01_extract") as e:
+                ext = s01_extract.run(job_dir, url=url, text=text)
+                e["chars"] = len(ext.text)
 
-        with jl.step("s02_analyze") as e:
-            _, usage = s02_analyze.run(job_dir)
-            e.update(usage)
+        if want(2):
+            with jl.step("s02_analyze") as e:
+                _, usage = s02_analyze.run(job_dir)
+                e.update(usage)
 
-        with jl.step("s03_script") as e:
-            project, usage = s03_script.run(job_dir, source_url=url)
-            e.update(usage)
-            e["scenes"] = len(project.scenes)
+        if want(3):
+            with jl.step("s03_script") as e:
+                project, usage = s03_script.run(job_dir, source_url=url)
+                e.update(usage)
+                e["scenes"] = len(project.scenes)
 
         # 음성을 먼저 만들어 실제 길이를 확인한다 (약 5초).
         # 30~60초를 벗어나면 이미지에 비용을 쓰기 전에 대본을 한 번 다시 만든다.
-        with jl.step("s05_tts") as e:
-            e.update(s05_tts.run(job_dir))
-            fb, target = _length_feedback(job_dir)
-            if fb and not regen_script:
-                log.warning(f"[run] {fb} (수정한 대본을 유지하므로 다시 만들지 않음)")
-                e["length_warning"] = fb
-            elif fb:
-                log.warning(f"[run] {fb} → 대본 재생성")
-                e["regenerated"] = fb
-                _, usage = s03_script.run(job_dir, source_url=url, feedback=fb, target_chars=target)
-                e["regen_tokens"] = usage
-                _clear(job_dir / "assets" / "audio")
+        if want(5):
+            with jl.step("s05_tts") as e:
                 e.update(s05_tts.run(job_dir))
+                fb, target = _length_feedback(job_dir)
+                if fb and not regen_script:
+                    log.warning(f"[run] {fb} (수정한 대본을 유지하므로 다시 만들지 않음)")
+                    e["length_warning"] = fb
+                elif fb:
+                    log.warning(f"[run] {fb} → 대본 재생성")
+                    e["regenerated"] = fb
+                    _, usage = s03_script.run(job_dir, source_url=url, feedback=fb, target_chars=target)
+                    e["regen_tokens"] = usage
+                    _clear(job_dir / "assets" / "audio")
+                    e.update(s05_tts.run(job_dir))
 
-        with jl.step("s04_image") as e:
-            e.update(s04_image.run(job_dir))
+        if want(4):
+            with jl.step("s04_image") as e:
+                e.update(s04_image.run(job_dir))
 
-        with jl.step("s06_animate") as e:
-            e.update(s06_animate.run(job_dir))
+        if want(6):
+            with jl.step("s06_animate") as e:
+                e.update(s06_animate.run(job_dir))
 
-        with jl.step("s07_subtitle") as e:
-            e.update(s07_subtitle.run(job_dir))
+        if want(7):
+            with jl.step("s07_subtitle") as e:
+                e.update(s07_subtitle.run(job_dir))
 
-        with jl.step("s08_render") as e:
-            result = s08_render.run(job_dir)
-            e.update(result)
-            jl.data["output"] = result["output"]
+        if want(8):
+            with jl.step("s08_render") as e:
+                result = s08_render.run(job_dir)
+                e.update(result)
+                jl.data["output"] = result["output"]
 
     finally:
         jl.data["total_seconds"] = round(time.time() - t_start, 2)
         jl.data["cost"] = cost.summarize(jl.data["steps"])  # 이 job에 쓴 API 비용 (재실행분 포함 누적)
         jl.save()
 
+    if partial:
+        jl.data["stopped_after"] = to_step
+        jl.save()
+        scenes_path = job_dir / "scenes.json"
+        n = f", 장면 {len(Project.load(scenes_path).scenes)}개" if scenes_path.exists() else ""
+        log.info(f"===== job {job_id}: {to_step}단계({STEP_NAMES[to_step]})까지 완료{n}, "
+                 f"처리 {jl.data['total_seconds']}초 =====")
+        _log_cost(jl.data["cost"])
+        log.info(f"이어서 실행: python -m pipeline.run --job {job_id}  (고친 대본 유지: --keep-script)")
+        return job_dir
+
     project = Project.load(job_dir / "scenes.json")
     log.info(
         f"===== job {job_id} 완료: 장면 {len(project.scenes)}개, "
         f"영상 {project.total_duration:.1f}초, 처리 {jl.data['total_seconds']}초 ====="
     )
-    c = jl.data["cost"]
-    unpriced = f" (단가 미확인: {', '.join(c['unpriced_steps'])})" if c["unpriced_steps"] else ""
-    log.info(f"API 비용(누적): ${c['total_usd']:.3f}{unpriced}")
+    _log_cost(jl.data["cost"])
     log.info(f"결과 영상: {jl.data['output']}")
     return job_dir
 
@@ -190,6 +243,11 @@ def main() -> None:
                    help="이 단계부터 다시 생성 (1 추출 · 2 분석 · 3 대본 · 4 이미지 · 5 음성 · 6 드로잉 · 7 자막 · 8 렌더)")
     p.add_argument("--scene", type=int, nargs="+", metavar="N",
                    help="--from-step 4~7과 함께: 지정한 장면만 다시 생성")
+    p.add_argument("--to-step", type=int, choices=range(1, 9), metavar="1-8",
+                   help="이 단계까지만 실행하고 멈춤. 실행 순서 1·2·3·5·4·6·7·8 기준 "
+                        "(3이면 대본까지만: 음성·이미지 실행 안 함)")
+    p.add_argument("--keep-script", action="store_true",
+                   help="음성 길이가 30~60초를 벗어나도 대본을 다시 만들지 않음 (직접 고친 대본 유지)")
     a = p.parse_args()
 
     if not (a.url or a.text_file or a.job):
@@ -198,13 +256,18 @@ def main() -> None:
         p.error("--from-step, --scene은 기존 job(--job)과 함께 써야 합니다")
     if a.scene and not a.from_step:
         p.error("--scene은 --from-step과 함께 써야 합니다 (예: --from-step 4 --scene 2)")
+    try:
+        check_step_range(a.from_step, a.to_step)
+    except ValueError as e:
+        p.error(str(e))
     if a.from_step in (1, 2) and not (a.url or a.text_file):
         # 추출부터 다시 할 때는 원래 URL을 log.json에서 가져온다
         log_path = settings.jobs_dir / a.job / "log.json"
         if log_path.exists():
             a.url = json.loads(log_path.read_text()).get("source_url")
     text = a.text_file.read_text(encoding="utf-8") if a.text_file else None
-    run(job_id=a.job, url=a.url, text=text, from_step=a.from_step, scene_ids=a.scene)
+    run(job_id=a.job, url=a.url, text=text, from_step=a.from_step, scene_ids=a.scene,
+        regen_script=not a.keep_script, to_step=a.to_step)
 
 
 if __name__ == "__main__":
