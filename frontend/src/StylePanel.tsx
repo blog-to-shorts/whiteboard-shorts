@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, FontInfo, Job, JobStyle } from "./api";
 
 // 자막·제목 모양 고르기. 오른쪽 미리보기는 실제 영상(1080×1920) 배치를 줄여 그린 것이고,
 // "다시 만들기"를 누르면 자막·영상 합성만 다시 해서(API 비용 없음) 영상에 반영한다.
 // 배치 숫자는 pipeline config.py 기본값과 같다 (IMAGE_TOP 360 / IMAGE_HEIGHT 1000 / SUBTITLE_BOTTOM 400 / TITLE_TOP 150)
-const W = 1080, H = 1920, IMG_TOP = 360, IMG_H = 1000, IMG_W = Math.round((IMG_H * 854) / 1280), SUB_BOTTOM = 400, TITLE_TOP = 150;
+const W = 1080, H = 1920, IMG_TOP = 360, IMG_H = 1000, IMG_W = Math.round((IMG_H * 854) / 1280), TITLE_TOP = 150;
+// 자막 위치(화면 아래에서 자막 아랫변까지, px). 쇼츠는 아래 약 320px를 재생바·채널명·버튼이 덮는다
+const SHORTS_UI = 320, BOTTOM_MIN = 100, BOTTOM_MAX = 1000, BOTTOM_DEFAULT = 400;
 const SCALE = 0.25;
 const DEFAULT_CSS = "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif";
 const DEFAULT: JobStyle = {
-  subtitle_font: "", subtitle_size: 56, subtitle_color: "#111111",
+  subtitle_font: "", subtitle_size: 56, subtitle_color: "#111111", subtitle_bottom: BOTTOM_DEFAULT,
   title_show: true, title_font: "", title_size: 80, title_color: "#111111",
 };
 // 흰 배경에서 잘 보이는 색 몇 가지 (그 밖의 색은 색상 칸에서 직접 고른다)
@@ -113,9 +115,32 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
   const locked = job.status === "queued" || job.status === "running";
   const changed = JSON.stringify(draft) !== savedKey;
   const set = <K extends keyof JobStyle>(k: K, v: JobStyle[K]) => setDraft((d) => ({ ...d, [k]: v }));
+  const clampBottom = (v: number) => Math.max(BOTTOM_MIN, Math.min(BOTTOM_MAX, Math.round(v / 10) * 10));
+
+  // 미리보기에서 자막을 위아래로 끌어 옮긴다 (화면 1px = 실제 영상 1/SCALE px)
+  const drag = useRef<{ y: number; bottom: number } | null>(null);
+  const onDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { y: e.clientY, bottom: draft.subtitle_bottom };
+  };
+  const onDragMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!drag.current) return;
+    set("subtitle_bottom", clampBottom(drag.current.bottom - (e.clientY - drag.current.y) / SCALE));
+  };
+  const onDragEnd = () => {
+    drag.current = null;
+  };
 
   const firstSub = job.scenes[0].subtitle_text ?? job.scenes[0].narration;
   const sample = wrapSample(firstSub, lineChars(draft.subtitle_size));
+  // 자막이 재생바에 가려지거나 그림과 겹치는지 어림한다 (줄 수 × 글씨 크기 × 줄 간격 1.35)
+  const subHeight = sample.split("\n").length * draft.subtitle_size * 1.35;
+  const subTop = H - draft.subtitle_bottom - subHeight;
+  const posWarn = draft.subtitle_bottom < SHORTS_UI
+      ? "쇼츠 재생바·버튼에 가려질 수 있어요"
+      : subTop < IMG_TOP + IMG_H
+          ? "그림 아래쪽과 겹쳐요"
+          : null;
   const subCss = subFont?.css ?? DEFAULT_CSS;
   const titleCss = titleFont?.css ?? subCss;
   // 긴 제목은 Remotion Title과 같은 방식으로 줄어든다
@@ -156,6 +181,21 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
               <span>자막 색상</span>
               <ColorPicker value={draft.subtitle_color} onChange={(c) => set("subtitle_color", c)} />
             </div>
+            <label>
+              <span>
+                자막 위치 <b>아래에서 {draft.subtitle_bottom}px</b> · 미리보기의 자막을 끌어도 돼요
+                {draft.subtitle_bottom !== BOTTOM_DEFAULT && (
+                    <button type="button" className="link-btn" onClick={() => set("subtitle_bottom", BOTTOM_DEFAULT)}>기본값</button>
+                )}
+              </span>
+              <span className="range-row">
+                <small>아래</small>
+                <input type="range" min={BOTTOM_MIN} max={BOTTOM_MAX} step={10} value={draft.subtitle_bottom}
+                       onChange={(e) => set("subtitle_bottom", Number(e.target.value))} />
+                <small>위</small>
+              </span>
+              {posWarn && <span className="warn">⚠ {posWarn}</span>}
+            </label>
             <label className="check">
               <input type="checkbox" checked={draft.title_show} onChange={(e) => set("title_show", e.target.checked)} />
               <span>상단 제목 표시 (AI가 만든 제목: {job.title ?? "-"})</span>
@@ -197,8 +237,11 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
                 <div className="sp-title" style={{ top: TITLE_TOP * SCALE, fontFamily: titleCss, fontSize: titleSize * SCALE, color: draft.title_color }}>{title}</div>
             )}
             <div className="sp-image" style={{ top: IMG_TOP * SCALE, height: IMG_H * SCALE, width: IMG_W * SCALE }}>그림</div>
-            <div className="sp-sub" style={{ bottom: SUB_BOTTOM * SCALE, fontFamily: subCss, fontSize: draft.subtitle_size * SCALE, color: draft.subtitle_color }}>{sample}</div>
-            <div className="sp-ui" style={{ height: SUB_BOTTOM * SCALE * 0.8 }}>쇼츠 재생바·버튼 영역</div>
+            <div className={`sp-sub${posWarn ? " warn" : ""}`}
+                 onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}
+                 title="위아래로 끌어서 위치를 바꿀 수 있어요"
+                 style={{ bottom: draft.subtitle_bottom * SCALE, fontFamily: subCss, fontSize: draft.subtitle_size * SCALE, color: draft.subtitle_color }}>{sample}</div>
+            <div className="sp-ui" style={{ height: SHORTS_UI * SCALE }}>쇼츠 재생바·버튼 영역</div>
           </div>
         </div>
       </div>

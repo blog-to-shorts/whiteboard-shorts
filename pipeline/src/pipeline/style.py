@@ -110,6 +110,7 @@ for _key, _label, _family, _group, _generic, _url in NOONNU:
 
 SUBTITLE_SIZE_RANGE = (36, 96)
 TITLE_SIZE_RANGE = (48, 140)
+SUBTITLE_BOTTOM_RANGE = (100, 1000)  # 100이면 맨 아래(재생바에 가려짐), 1000이면 화면 가운데쯤
 
 
 def defaults() -> dict:
@@ -117,6 +118,7 @@ def defaults() -> dict:
         "subtitle_font": "",  # 빈 값 = .env의 SUBTITLE_FONT
         "subtitle_size": settings.subtitle_size,
         "subtitle_color": settings.subtitle_color,
+        "subtitle_bottom": settings.subtitle_bottom,  # 화면 아래에서 자막 아랫변까지(px)
         "title_show": settings.title_show,
         "title_font": "",     # 빈 값 = 자막 글꼴과 같게
         "title_size": settings.title_size,
@@ -145,6 +147,8 @@ def save(job_dir: Path, style: dict) -> dict:
     merged["subtitle_size"] = max(lo, min(hi, int(merged["subtitle_size"])))
     lo, hi = TITLE_SIZE_RANGE
     merged["title_size"] = max(lo, min(hi, int(merged["title_size"])))
+    lo, hi = SUBTITLE_BOTTOM_RANGE
+    merged["subtitle_bottom"] = max(lo, min(hi, int(merged["subtitle_bottom"])))
     merged["title_show"] = bool(merged["title_show"])
     for key in ("subtitle_color", "title_color"):
         if not re.fullmatch(r"#[0-9a-fA-F]{6}", str(merged[key])):
@@ -185,7 +189,7 @@ def remotion_style(job_dir: Path) -> dict:
             "size": st["subtitle_size"],
             "weight": settings.subtitle_weight,
             "color": st["subtitle_color"],
-            "bottom": settings.subtitle_bottom,
+            "bottom": st["subtitle_bottom"],
             "google": google_spec(st["subtitle_font"]),
             "url": font_url(st["subtitle_font"]),
         },

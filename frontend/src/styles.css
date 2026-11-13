@@ -154,3 +154,11 @@ background:#fff;border:0;padding:12px 16px;box-shadow:0 10px 30px rgba(0,0,0,.2)
 .swatch.on{border-color:#fff;outline:2px solid var(--ink)}
 .color-row input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--ink);background:none;cursor:pointer}
 .color-row code{font-size:12px;color:var(--ink)}
+.range-row{display:flex;align-items:center;gap:8px}
+.range-row small{font-size:12px;color:var(--muted);white-space:nowrap}
+.range-row input[type=range]{flex:1}
+.link-btn{background:none;border:0;padding:0 0 0 8px;font-size:12px;color:var(--accent);text-decoration:underline}
+.style-controls .warn{color:#c62828;font-size:12px}
+.sp-sub{cursor:ns-resize;touch-action:none;user-select:none;z-index:2}
+.sp-sub:hover{outline:1px dashed var(--accent);outline-offset:2px}
+.sp-sub.warn{outline:1px dashed #c62828;outline-offset:2px}

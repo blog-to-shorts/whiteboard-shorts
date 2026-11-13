@@ -16,6 +16,7 @@ export type JobStyle = {
   subtitle_font: string; // FontInfo.key, 빈 값 = 기본 글꼴
   subtitle_size: number;
   subtitle_color: string; // #rrggbb
+  subtitle_bottom: number; // 화면 아래에서 자막 아랫변까지(px, 1920 기준)
   title_show: boolean;
   title_font: string;
   title_size: number;
