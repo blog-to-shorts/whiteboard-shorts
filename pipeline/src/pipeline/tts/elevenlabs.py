@@ -25,14 +25,16 @@ def voice_settings() -> dict:
 
 
 @retry(times=3)
-def synthesize(text: str, out_mp3: Path, prev_text: str = "", next_text: str = "") -> Optional[dict]:
-    """음성을 out_mp3에 저장하고 글자별 시각을 돌려준다.
+def synthesize(text: str, out_mp3: Path, prev_text: str = "", next_text: str = "",
+               voice_id: Optional[str] = None) -> Optional[dict]:
+    """음성을 out_mp3에 저장하고 글자별 시각을 돌려준다. voice_id를 주면 .env 대신 그 성우로 (성우 예선용)
     반환: {"chars": [...], "starts": [...], "ends": [...]} (mp3 기준 초) 또는 정렬 정보가 없으면 None"""
-    if not settings.elevenlabs_api_key or not settings.elevenlabs_voice_id:
+    voice_id = voice_id or settings.elevenlabs_voice_id
+    if not settings.elevenlabs_api_key or not voice_id:
         raise RuntimeError("ELEVENLABS_API_KEY / ELEVENLABS_VOICE_ID가 비어 있습니다 (.env 확인)")
     vs = voice_settings()
     resp = requests.post(
-        URL.format(voice_id=settings.elevenlabs_voice_id),
+        URL.format(voice_id=voice_id),
         params={"output_format": "mp3_44100_128"},
         headers={"xi-api-key": settings.elevenlabs_api_key, "Content-Type": "application/json"},
         json={

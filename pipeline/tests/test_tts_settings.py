@@ -84,6 +84,22 @@ def test_synthesize_sends_voice_settings(monkeypatch, tmp_path):
     assert align == {"chars": ["가"], "starts": [0.1], "ends": [0.2]}
 
 
+def test_synthesize_voice_id_override(monkeypatch, tmp_path):
+    _use(monkeypatch, elevenlabs, elevenlabs_api_key="k", elevenlabs_voice_id="env_voice")
+    urls = []
+
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return {"audio_base64": base64.b64encode(b"mp3").decode()}
+
+    monkeypatch.setattr(elevenlabs.requests, "post", lambda url, **kw: urls.append(url) or Resp())
+    elevenlabs.synthesize("가", tmp_path / "a.mp3")
+    elevenlabs.synthesize("가", tmp_path / "b.mp3", voice_id="other_voice")
+    assert "/env_voice/" in urls[0] and "/other_voice/" in urls[1]
+
+
 def test_synthesize_rejects_bad_settings_before_request(monkeypatch, tmp_path):
     _use(monkeypatch, elevenlabs, elevenlabs_api_key="k", elevenlabs_voice_id="v", elevenlabs_stability=2.0)
     monkeypatch.setattr(elevenlabs.requests, "post", lambda *a, **k: pytest.fail("API를 호출하면 안 됨"))
