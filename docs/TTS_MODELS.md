@@ -102,3 +102,23 @@
 
 - 적용 범위: 로컬 `.env`의 `ELEVENLABS_MODEL_ID`만 바꿨다. `.env.example`의 기본값(v2)은 PR에서 정한다.
 - 남은 확인: v4 계열은 마지막 문장부호의 끝 시각이 파일 길이보다 0.08초 길다(5절). 실제 job에서 `eval_jobs.py`의 `subtitle_drift_max`, `subtitle_in_video`로 자막 싱크에 문제가 없는지 확인할 것.
+
+## 7. 실측 크레딧 (2026-11-14, Starter 요금제)
+
+| 호출 | 보낸 글자 | 실제 차감 | 글자당 | `/v1/models` 배율로 계산한 값 |
+| --- | --- | --- | --- | --- |
+| 확인 호출 (5절): v4, v4 Turbo, v2 각 15자 | 45자 | 15 | 약 0.33 | 37.5 |
+| 성우 예선: v4 Turbo, 168자 × 3명 | 504자 | 102 | 약 0.20 | 252 (배율 0.5) |
+
+- 두 번 모두 배율로 계산한 값보다 적게 차감됐다. 요금제나 프로모션에 따른 차이일 수 있지만 문서로는 확인하지 못했다.
+- 비용을 예상할 때는 배율로 계산한 값을 상한으로 보고, 실제 차감은 사용량으로 확인한다.
+- **사용량(`/v1/user/subscription`의 `character_count`)은 호출 뒤 30초 넘게 지나서 반영되기도 한다.** 호출 직후에 조회하면 일부만 반영된 값이 나온다. `scripts/voice_audition.py`는 최소 45초를 기다린 뒤 확정한다.
+- 호출별 차감은 사용량 조회로는 나눠 볼 수 없다. 생성 기록(`/v1/history`)을 보려면 `speech_history_read` 권한이 필요하다.
+
+## 8. 결정: 성우는 Chris (2026-11-14)
+
+- voice_id `PDoCXqBQFGsvfO0hNkEs` (Voice Library "Chris - Warm and Clear", 청년 남성, 정보 전달용)
+- 예선: Voice Library 한국어 목소리 중 후보 20명을 미리듣기로 추린 뒤 3명(Chris, Anna Kim, Mina)으로 같은 문단(`scripts/voice_audition.py`, eleven_v4_turbo)을 만들어 비교했다.
+- 이유: 예선 3명 중 가장 자연스럽고, 말 빠르기가 쇼츠에 맞았다. 초당 5.16자로 셋 중 가장 빨랐다(Anna Kim 4.82, Mina 4.85).
+- Voice Library 목소리는 My Voices에 추가하지 않아도 API로 바로 쓸 수 있었다(Starter 요금제).
+- 적용 범위: 로컬 `.env`의 `ELEVENLABS_VOICE_ID`만 바꿨다. `.env.example`은 PR에서 정한다.
