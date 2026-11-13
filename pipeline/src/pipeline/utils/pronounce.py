@@ -41,7 +41,7 @@ PRONUNCIATIONS = {
     # 시험·자격증
     "TOEIC": "토익", "TOEFL": "토플", "TEPS": "텝스", "OPIc": "오픽", "OPIC": "오픽", "TOPIK": "토픽",
     "PSAT": "피셋", "LEET": "리트", "GSAT": "지에스에이티", "MOS": "모스", "ADsP": "에이디에스피",
-    "NCLEX": "엔클렉스", "UWorld": "유월드", "Q-net": "큐넷", "Q-Net": "큐넷",
+    "NCLEX": "엔클렉스", "UWorld": "유월드", "Saunders": "손더스", "Q-net": "큐넷", "Q-Net": "큐넷",
     "333 위아너스": "삼삼삼 위아너스",  # 숫자를 하나씩 읽는 교재 이름
     "HACCP": "해썹", "TESAT": "테샛", "BIM": "빔", "CATIA": "카티아", "AutoCAD": "오토캐드",
     "IELTS": "아이엘츠", "GMAT": "지맷", "MEET": "미트", "DEET": "디트", "PEET": "피트",

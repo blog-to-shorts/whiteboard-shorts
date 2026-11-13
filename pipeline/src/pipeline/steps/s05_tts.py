@@ -117,16 +117,8 @@ def retrim(job_dir: Path, only: list[int] | None = None) -> dict:
             info.update(trimmed_sec=trimmed, lead_sec=LEAD_SEC, cut=_cut_record(cut))
             lufs.append(cut.get("lufs_after"))
             align_path.write_text(json.dumps(info, ensure_ascii=False), encoding="utf-8")
-            # 음성 길이에 맞춰 만든 산출물만 지운다 (regions는 그림 기준이라 남김)
-            for f in (job_dir / s.video, final_video_path(job_dir, s), job_dir / (s.subtitle or "")):
-                if f.is_file():
-                    f.unlink()
-                    removed.append(str(f.relative_to(job_dir)))
+            removed += clear_length_outputs(job_dir, s)
             log.info(f"[s05] scene {s.id:02d} 다시 자름: {before}초 → {s.duration}초")
-        out = job_dir / OUTPUT_NAME
-        if out.exists():
-            out.unlink()
-            removed.append(OUTPUT_NAME)
         project.save(path)
         e.update(scenes=[s.id for s in targets], total_seconds=round(project.total_duration, 2), lufs=lufs,
                  cut={k: v for k, v in _cut_record({}).items()})
@@ -135,8 +127,21 @@ def retrim(job_dir: Path, only: list[int] | None = None) -> dict:
     return {"scenes": [s.id for s in targets], "total_seconds": round(project.total_duration, 2), "removed": removed}
 
 
+def clear_length_outputs(job_dir: Path, scene: Scene) -> list[str]:
+    """음성 길이에 맞춰 만든 산출물(드로잉 영상·변환 영상·자막·최종 영상)을 지운다.
+    그리는 순서 계획(regions)은 그림 기준이라 남긴다 → 다시 렌더할 때 GPT를 부르지 않는다"""
+    removed = []
+    for f in (job_dir / scene.video, final_video_path(job_dir, scene), job_dir / (scene.subtitle or ""),
+              job_dir / OUTPUT_NAME):
+        if f.is_file():
+            f.unlink()
+            removed.append(str(f.relative_to(job_dir)))
+    return removed
+
+
 def run(job_dir: Path, only: list[int] | None = None) -> dict:
-    """장면별 음성 생성 + 길이 측정. only=[3]처럼 주면 해당 장면만 다시 만든다."""
+    """장면별 음성 생성 + 길이 측정. only=[3]처럼 주면 해당 장면만 다시 만든다
+    (그 장면의 음성 길이에 맞춘 영상·자막도 지운다 → 이어서 python -m pipeline.run --job <job> --keep-script)."""
     path = job_dir / "scenes.json"
     project = Project.load(path)
     scenes = project.scenes
@@ -145,6 +150,7 @@ def run(job_dir: Path, only: list[int] | None = None) -> dict:
         for s in targets:
             for f in [job_dir / s.audio, *raw_files(job_dir / s.audio)]:
                 f.unlink(missing_ok=True)
+            clear_length_outputs(job_dir, s)
 
     def neighbors(s: Scene) -> tuple[str, str]:
         i = scenes.index(s)
