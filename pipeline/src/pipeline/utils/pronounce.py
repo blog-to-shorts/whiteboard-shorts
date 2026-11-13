@@ -199,8 +199,16 @@ def _int(num: str):
     return None
 
 
+# 날짜의 월·일은 숫자에 붙여 읽는다 (구월 일일). 띄우면 TTS가 끊어 읽고 '일 일'이 어색하다. 년은 띄운다
+ATTACHED_UNITS = {"월", "일"}
+
+
+def _sep(unit: str) -> str:
+    return "" if unit in ATTACHED_UNITS else " "
+
+
 def _month(m: int) -> str:
-    return {6: "유월", 10: "시월"}.get(m, f"{read_number(str(m))} 월")
+    return {6: "유월", 10: "시월"}.get(m, f"{read_number(str(m))}월")
 
 
 def _english_or_sino(n: str) -> str:
@@ -290,7 +298,7 @@ def _kor_term(num: str, unit: str, je: bool = False, rest: str = "") -> str:
         if unit == "번째" and v == 1:
             return "첫 번째"
         return f"{read_native(v)} {unit}"
-    return f"{read_numexpr(num)} {unit}"
+    return f"{read_numexpr(num)}{_sep(unit)}{unit}"
 
 
 def _sym_term(num: str, sym: str) -> str:
@@ -346,20 +354,20 @@ def analyze(text: str) -> Result:
         y, mo, d, wd = m.group(1), int(m.group(3)), int(m.group(4)), m.group(5)
         if not (1 <= mo <= 12 and 1 <= d <= 31):
             return m.group(0)
-        return f"{read_number(y)} 년 {_month(mo)} {read_number(str(d))} 일" + (f" {wd}요일" if wd else "")
+        return f"{read_number(y)} 년 {_month(mo)} {read_number(str(d))}일" + (f" {wd}요일" if wd else "")
     text = _DATE_YMD.sub(ymd, text)
 
     def ymd_spaced(m):  # 점 뒤에 공백 → 자막 싱크 기준 문장부호이므로 점을 남긴다
         y, s1, mo, s2, d = m.groups()
         if not (1 <= int(mo) <= 12 and 1 <= int(d) <= 31):
             return m.group(0)
-        return f"{read_number(y)} 년.{s1}{_month(int(mo))}.{s2}{read_number(d)} 일"
+        return f"{read_number(y)} 년.{s1}{_month(int(mo))}.{s2}{read_number(d)}일"
     text = _DATE_SPACED.sub(ymd_spaced, text)
     text = _YY.sub(lambda m: f"{read_number(m.group(1))} 년", text)
 
     def md(m):
         a, b, wd = int(m.group(1)), int(m.group(2)), m.group(3)
-        date = f"{_month(a)} {read_number(str(b))} 일" + (f" {wd}요일" if wd else "")
+        date = f"{_month(a)} {read_number(str(b))}일" + (f" {wd}요일" if wd else "")
         if wd and 1 <= a <= 12 and 1 <= b <= 31:
             return date
         if 1 <= a <= 12 and 13 <= b <= 31:
@@ -420,7 +428,7 @@ def analyze(text: str) -> Result:
 
         def right() -> str:
             return _kor_term(n2, k2, rest=rest) if k2 else (_sym_term(n2, s2) if s2 else read_numexpr(n2))
-        tail = f" {k2}" if k2 else (f" {_sym_name(s2)}" if s2 else "")
+        tail = f"{_sep(k2)}{k2}" if k2 else (f" {_sym_name(s2)}" if s2 else "")
         # 줄여 쓴 범위: 2~30 → 이삼십, 4~50만 → 사오십만
         if not (k1 or s1) and re.fullmatch(r"\d", n1):
             mm = re.fullmatch(rf"(\d+)({_BIG_SUFFIX})?", n2)
