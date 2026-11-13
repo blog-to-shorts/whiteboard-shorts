@@ -169,6 +169,7 @@ def _build_project(draft: ScriptDraft, analysis: Analysis, source_url: Optional[
             subtitle_text=s.subtitle_text.strip() or None,
             point_ids=sorted(set(s.point_ids)),
             image_prompt=s.image_prompt.strip(),
+            numeric_highlight=s.numeric_highlight,
             image=f"assets/images/scene_{i:02d}.png",
             audio=f"assets/audio/scene_{i:02d}.wav",
             video=f"videos/scene_{i:02d}.mp4",
@@ -270,6 +271,9 @@ def run(job_dir: Path, source_url: Optional[str] = None, feedback: str = "",
             log.info("[s03] 수치·조건 검증 통과")
 
     project = _build_project(best, analysis, source_url)
+    if fact_issues:
+        for scene in project.scenes:
+            scene.numeric_highlight = None
     project.save(out)
     chars = sum(len(s.narration) for s in project.scenes)
     covered = {p for s in project.scenes for p in s.point_ids} & set(range(1, n_points + 1))

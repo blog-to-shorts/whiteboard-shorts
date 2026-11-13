@@ -107,6 +107,8 @@ def rerun(job_id: str, edits: list[dict]) -> None:
                 continue
             setattr(scene, field, value)
             changed = True
+            if field in ("narration", "subtitle_text"):
+                scene.numeric_highlight = None
             if field == "narration":
                 audio_ids.append(scene.id)
             elif field == "image_prompt":
