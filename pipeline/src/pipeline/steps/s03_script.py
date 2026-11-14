@@ -4,6 +4,7 @@
   - 장면 수, 장면별·전체 글자 수 (→ 영상 길이 30~60초)
   - 핵심 포인트 누락 여부 (→ 원문 핵심 정보 누락 자동 검증)
     - 이미지 프롬프트의 글자 지시: 숫자·따옴표·한글·금지어 (→ 글자보다 그림 중심)
+  - 그림 주인공(visual_focus)이 그 장면 자막에 그대로 나오는지 (→ 그림과 자막이 같은 대상을 가리킴)
 그다음 원문과 대조해 수치·조건 오류를 검사한다.
   - 오류가 있으면 그 내용을 붙여 대본을 1회 다시 만든다
   - 그래도 남으면 멈추지 않고 log.json에 fact_issues로 남긴 뒤 진행한다
@@ -50,6 +51,22 @@ def _total_range(target_chars: Optional[int] = None) -> tuple[int, int]:
     return int((settings.min_duration + 5) * cps), int((settings.max_duration - 5) * cps)
 
 
+MAX_FOCUS_CHARS = 15  # 그림 주인공은 짧은 명사구 하나 (문장 전체를 옮겨 적는 것 방지)
+
+
+def _focus_error(focus: Optional[str], subtitle: str) -> Optional[str]:
+    """그림 주인공(visual_focus)이 자막에 실제로 나오는 짧은 말인지 검사. 문제가 없으면 None.
+    띄어쓰기는 무시하고 비교한다 (지하 2층 집 = 지하2층집)."""
+    focus = (focus or "").strip()
+    if not focus:
+        return "가 비어 있습니다."
+    if len(focus) > MAX_FOCUS_CHARS:
+        return f"가 {len(focus)}자로 깁니다. {MAX_FOCUS_CHARS}자 이내의 명사구 하나로 줄이세요."
+    if re.sub(r"\s", "", focus) not in re.sub(r"\s", "", subtitle):
+        return "가 subtitle_text에 없습니다."
+    return None
+
+
 def _violations(draft: ScriptDraft, n_points: int, t_range: tuple[int, int],
                 has_definition: bool = False) -> list[str]:
     errs = []
@@ -87,6 +104,12 @@ def _violations(draft: ScriptDraft, n_points: int, t_range: tuple[int, int],
                         "숫자·따옴표·글자·라벨·표지판 없이 사물, 사람의 행동, 화살표 같은 그림으로만 표현하세요 "
                         "(예: '60점' → a test paper with a big check mark).")
 
+    for i, s in enumerate(draft.scenes, 1):
+        err = _focus_error(s.visual_focus, s.subtitle_text or s.narration)
+        if err:
+            errs.append(f"{i}번 장면 visual_focus({s.visual_focus!r}){err} 그림과 자막이 같은 대상을 가리키도록 "
+                        "subtitle_text 속 낱말 그대로 적고, image_prompt는 그 대상을 화면 중심에 그리세요.")
+
     covered = {pid for s in draft.scenes for pid in s.point_ids}
     missing = [p for p in range(1, n_points + 1) if p not in covered]
     if missing:
@@ -120,6 +143,7 @@ def _build_project(draft: ScriptDraft, analysis: Analysis, source_url: Optional[
             narration=s.narration.strip(),
             subtitle_text=s.subtitle_text.strip() or None,
             point_ids=sorted(set(s.point_ids)),
+            visual_focus=s.visual_focus.strip() or None,
             image_prompt=s.image_prompt.strip(),
             image=f"assets/images/scene_{i:02d}.png",
             audio=f"assets/audio/scene_{i:02d}.wav",
