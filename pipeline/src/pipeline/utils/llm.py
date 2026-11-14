@@ -24,13 +24,13 @@ def load_prompt(name: str, **kwargs) -> str:
     return text.format(**kwargs) if kwargs else text
 
 
-def _image_part(path: Path) -> dict:
+def _image_part(path: Path, detail: str) -> dict:
     data = base64.b64encode(path.read_bytes()).decode()
-    return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data}", "detail": "low"}}
+    return {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{data}", "detail": detail}}
 
 
 def parse(system: str, user: str, model_cls, image: Optional[Path] = None,
-          reasoning_effort: Optional[str] = None):
+          reasoning_effort: Optional[str] = None, *, image_detail: str = "low"):
     """Pydantic 모델 형식으로만 답하도록 강제해서 호출.
     GPT-5 계열은 temperature 등을 받지 않으므로 넘기지 않는다.
     image를 주면 그림을 함께 보내 그림을 보고 답하게 한다.
@@ -42,7 +42,7 @@ def parse(system: str, user: str, model_cls, image: Optional[Path] = None,
     resp = client().chat.completions.parse(
         model=settings.text_model,
         messages=[{"role": "system", "content": system},
-                  {"role": "user", "content": [{"type": "text", "text": user}, _image_part(image)]
+                  {"role": "user", "content": [{"type": "text", "text": user}, _image_part(image, image_detail)]
                   if image else user}],
         response_format=model_cls,
         **extra,
