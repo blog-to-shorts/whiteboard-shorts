@@ -16,7 +16,7 @@
   length_ok            영상 길이가 MIN_DURATION~MAX_DURATION(기본 30~60초) 안인지
   av_diff_sec          영상 길이와 음성 길이 차이(초). 0.1 이하가 정상
   points_covered       핵심 포인트 반영 수 / 전체
-  format_violations    대본 형식 규칙 위반 수 (장면 수·장면별 글자 수·TTS 문장 속 숫자·첫 장면 주제 정의·그림 속 글자·포인트 누락)
+  format_violations    대본 형식 규칙 위반 수 (장면 수·장면별 글자 수·TTS 문장 속 숫자·첫 장면 주제 정의·그림 속 글자·그림 주인공이 자막에 없음·포인트 누락)
   image_text_scenes    그림 설명에 글자를 부르는 표현이 남은 장면 수 (format_violations에 포함된 항목)
   fact_issues          원문과 다른 수치·조건으로 남은 오류 수 (수치 검증 도입 전 job은 빈칸)
   subtitle_timed       글자별 발화 시각으로 자막을 맞춘 장면 수 / 전체
@@ -78,8 +78,12 @@ def _script_checks(job_dir: Path, project: Project) -> tuple[int, int, str]:
     n_points = len(analysis.all_points())
     draft = ScriptDraft.model_validate({"scenes": [
         {"narration": s.narration, "subtitle_text": s.subtitle_text or s.narration,
-         "point_ids": s.point_ids, "image_prompt": s.image_prompt} for s in project.scenes]})
+         "point_ids": s.point_ids, "visual_focus": s.visual_focus or "",
+         "image_prompt": s.image_prompt} for s in project.scenes]})
     errs = _violations(draft, n_points, _total_range(), bool(analysis.topic_definition))
+    # 그림 주인공(visual_focus) 검사는 이 값을 기록하기 전에 만든 job에는 적용하지 않는다
+    if not any(s.visual_focus for s in project.scenes):
+        errs = [e for e in errs if "visual_focus" not in e]
     # 전체 글자 수 규칙은 음성 길이를 예상하는 용도라 제외 (실제 길이는 voice_sec·length_ok로 본다)
     errs = [e for e in errs if not e.startswith("전체 내레이션")]
     image_text = sum(1 for s in project.scenes if IMAGE_TEXT.search(s.image_prompt))

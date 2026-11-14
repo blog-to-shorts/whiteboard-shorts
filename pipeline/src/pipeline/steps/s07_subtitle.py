@@ -29,10 +29,128 @@ LINE_CHARS = job_style.line_chars(settings.subtitle_size)  # job마다 웹에서
 
 
 # ---------- 자막 ----------
-def split_cues(text: str, max_chars: int = MAX_CUE_CHARS) -> list[str]:
+# 자막을 끊을 자리(띄어쓰기)를 고를 때 쓰는 한국어 규칙.
+# 형태소 분석기 없이 낱말 끝 글자만 보고 판단한다. 점수가 낮을수록 끊기 좋은 자리.
+#   좋은 자리: 쉼표·문장 끝 뒤, 연결 어미(-고, -며, -면, -지만, -는데 …) 뒤, 조사(은/는/이/가/을/를/에서 …) 뒤
+#   나쁜 자리: 꾸미는 말(현실적인, 안 드는, 제대로, 가장 …) 뒤 → 꾸밈을 받는 말과 떨어진다
+#              조사·어미 없이 끝난 낱말(주거 / 문제) 뒤 → 복합 명사가 갈라진다
+#              의존 명사(수, 것, 때 …) 앞 → '할 / 수 있다'처럼 갈라진다
+_CONNECTIVE_ENDINGS = ("지만", "는데", "은데", "니까", "으니", "려면", "으면", "면서", "도록", "어서", "아서",
+                       "해서", "여서", "고", "며", "면", "서", "듯", "게")
+# 조사는 뒤 말과 얼마나 붙어 다니는지에 따라 셋으로 나눈다
+#   주제·주어·범위 (화란은 / 웹툰 작가를 …) → 끊기 좋다
+#   목적어·방향 (책을 / 고르세요) → 끊어도 된다
+#   소유·나열 (부품의 / 구조, 상수도와 / 하수도) → 바로 뒤 명사와 한 덩어리라 끊지 않는다
+_TOPIC_PARTICLES = ("에서는", "에서", "부터", "까지", "조차", "마저", "처럼", "보다", "만큼", "에는", "에도", "로는",
+                    "와는", "과는", "께서", "은", "는", "이", "가", "요", "다")
+_OBJECT_PARTICLES = ("에게", "으로", "이나", "라도", "을", "를", "에", "도", "로", "만", "께")
+_BINDING_PARTICLES = ("와", "과", "랑", "및")
+# '는'·'은'으로 끝나도 조사가 아니라 뒤의 말을 꾸미는 낱말 (있는, 하는, 같은 …) → 조사보다 먼저 검사
+_MODIFIER_ENDINGS = ("적인", "있는", "없는", "하는", "되는", "드는", "받는", "주는", "보는", "오는", "가는",
+                     "같은", "좋은", "많은", "적은", "높은", "낮은", "작은", "넓은", "짧은")
+# 한 글자 관형형 어미 (중요한, 준비할, 지나간 …) — 대개 꾸미는 말이지만 위 목록보다는 덜 확실하다
+_WEAK_MODIFIER_ENDINGS = ("한", "운", "된", "던", "할", "될", "긴", "인")
+# 뒤의 말을 꾸미는 짧은 낱말 (부사·관형사·수 관형사)
+_MODIFIER_WORDS = {"더", "덜", "안", "못", "잘", "꼭", "또", "다", "곧", "늘", "참", "좀", "아주", "매우", "너무",
+                   "가장", "제일", "정말", "제대로", "특히", "바로", "다시", "함께", "모두", "이미", "아직", "그",
+                   "이", "저", "그런", "이런", "저런", "어떤", "모든", "각", "한", "두", "세", "네", "몇", "여러",
+                   "새", "헌", "옛", "총", "약", "단", "첫", "매", "전", "결국", "보통", "만약", "혹시"}
+# 앞말에 붙어 다니는 의존 명사·보조 용언 → 그 앞에서 끊지 않는다
+_BOUND_WORDS = {"수", "것", "거", "때", "등", "중", "줄", "데", "뿐", "만큼", "정도", "적", "채", "듯", "척",
+                "있습니다", "있어요", "없습니다", "없어요", "합니다", "해요", "됩니다", "돼요", "있는", "없는"}
+
+
+def _has_final_consonant(ch: str) -> bool:
+    return "가" <= ch <= "힣" and (ord(ch) - 0xAC00) % 28 != 0
+
+
+def _adnominal_neun(word: str) -> bool:
+    """받침 있는 글자 뒤의 '는'(묻는, 읽는, 찾는)은 주제 조사가 아니라 꾸미는 어미다.
+    주제 조사는 받침 뒤에서 '은'이 되기 때문 (사람은, 시험은)."""
+    return len(word) >= 2 and word.endswith("는") and _has_final_consonant(word[-2])
+
+
+def _word_before(text: str, i: int) -> str:
+    return text[:i].rstrip().split(" ")[-1] if text[:i].strip() else ""
+
+
+def _word_after(text: str, i: int) -> str:
+    rest = text[i:].strip()
+    return rest.split(" ")[0] if rest else ""
+
+
+def _break_penalty(text: str, i: int) -> float:
+    """text의 i번째 위치(띄어쓰기)에서 끊을 때의 의미상 감점. 낮을수록 좋다."""
+    left = _word_before(text, i)
+    right = _word_after(text, i).rstrip(".,?!")
+    core = left.rstrip(".,?!\"'”’)")
+    if not left or not right:
+        return 100.0
+    if left[-1] in ".?!":
+        return -3.0
+    if left[-1] == ",":
+        return -2.0
+    if right in _BOUND_WORDS:
+        return 6.0
+    if core in _MODIFIER_WORDS:
+        return 5.0
+    if len(core) == 1 or len(right) == 1:  # 한 글자 낱말이 줄 끝·줄 앞에 홀로 남는 것 방지
+        return 4.0
+    if core.endswith(_MODIFIER_ENDINGS) or _adnominal_neun(core):
+        return 4.0
+    if core.endswith(_WEAK_MODIFIER_ENDINGS):
+        return 3.0
+    for endings, score in ((("의",), 2.0), (_CONNECTIVE_ENDINGS, -1.5), (_TOPIC_PARTICLES, -1.5),
+                           (_BINDING_PARTICLES, 1.0), (("을", "를"), 0.5), (_OBJECT_PARTICLES, 0.0)):
+        hit = next((e for e in endings if core.endswith(e)), None)
+        if hit:
+            # 두 글자 낱말의 한 글자 끝(도면의 '면', 평가의 '가')은 명사 자체일 때가 많아 덜 믿는다
+            if len(hit) == 1 and len(core) == 2 and score < 0.5:
+                return 0.5
+            return score
+    if core[-1].isdigit() or not ("가" <= core[-1] <= "힣"):  # 2층, 60점, CBT 같은 말 뒤 → 대개 뒤 말과 이어진다
+        return 2.0
+    return 3.0  # 조사·어미가 없는 낱말 (주거 / 문제, 지하 / 2층)
+
+
+SHORT_PART = 6  # 이보다 짧은 조각(예: '답안은')이 혼자 한 줄·한 화면을 차지하면 감점
+
+
+def _best_cut(text: str, max_part: Optional[int] = None, balance: float = 12.0) -> Optional[int]:
+    """text를 둘로 나눌 띄어쓰기 위치. 의미 감점 + 가운데에서 멀어진 정도를 함께 본다.
+    max_part를 주면 두 조각이 모두 그 길이 이하인 자리만 고른다 (그런 자리가 없으면 전체에서 고름)."""
+    spaces = [i for i, ch in enumerate(text) if ch == " "]
+    if not spaces:
+        return None
+    if max_part:
+        fit = [i for i in spaces if len(text[:i].rstrip()) <= max_part and len(text[i:].strip()) <= max_part]
+        spaces = fit or spaces
+    mid = len(text) / 2
+
+    def cost(i: int) -> float:
+        short = min(len(text[:i].strip()), len(text[i:].strip())) < SHORT_PART
+        return _break_penalty(text, i) + balance * abs(i - mid) / len(text) + (3.0 if short else 0.0)
+    return min(spaces, key=cost)
+
+
+def max_cue_chars(line_chars: int = LINE_CHARS) -> int:
+    """한 번에 보여줄 자막 길이: 두 줄 안에 들어가는 만큼 (최대 MAX_CUE_CHARS)"""
+    return max(8, min(MAX_CUE_CHARS, 2 * line_chars - 2))
+
+
+def _fits_two_lines(text: str, line_chars: int) -> bool:
+    """한 줄에 들어가거나, 두 줄 모두 한 줄 폭 안에 드는 띄어쓰기가 있는지"""
+    if len(text) <= line_chars:
+        return True
+    return any(len(text[:i].rstrip()) <= line_chars and len(text[i:].strip()) <= line_chars
+               for i, ch in enumerate(text) if ch == " ")
+
+
+def split_cues(text: str, max_chars: int = MAX_CUE_CHARS, line_chars: Optional[int] = None) -> list[str]:
     """문장 단위로 나누고, 긴 문장은 의미가 끊기지 않는 지점에서 둘로 나눈다.
-    1순위: 쉼표 바로 뒤 (가운데에 가장 가까운 쉼표)
-    2순위: 가운데에 가장 가까운 띄어쓰기
+    1순위: 가운데 근처의 쉼표 바로 뒤
+    2순위: 연결 어미·조사 뒤처럼 끊어도 뜻이 통하는 띄어쓰기 (_break_penalty)
+    line_chars를 주면 한 줄 폭으로 두 줄 안에 들어가지 않는 조각도 더 나눈다.
     """
     sentences = [s.strip() for s in re.split(r"(?<=[.?!])\s+", text.strip()) if s.strip()]
     cues: list[str] = []
@@ -41,17 +159,20 @@ def split_cues(text: str, max_chars: int = MAX_CUE_CHARS) -> list[str]:
         sent = queue.pop(0)
         # 쉼표로 끝나는 조각(구 단위)은 조금 길어도 그대로 둔다 → 구 중간에서 끊기는 것 방지
         limit = max_chars + (6 if sent.endswith(",") else 0)
-        if len(sent) <= limit:
+        if len(sent) <= limit and (not line_chars or _fits_two_lines(sent, line_chars)):
             cues.append(sent)
             continue
         mid = len(sent) / 2
-        commas = [i + 1 for i, ch in enumerate(sent) if ch == "," and 4 <= i < len(sent) - 4]
-        spaces = [i for i, ch in enumerate(sent) if ch == " "]
-        candidates = commas or spaces
-        if not candidates:
-            cues.append(sent)
-            continue
-        cut = min(candidates, key=lambda i: abs(i - mid))
+        commas = [i + 1 for i, ch in enumerate(sent) if ch == "," and 4 <= i < len(sent) - 4
+                  and (i + 1 == len(sent) or sent[i + 1] == " ")]  # 15,000원 같은 숫자 속 쉼표 제외
+        commas = [c for c in commas if abs(c - mid) <= len(sent) * 0.3]
+        if commas:
+            cut = min(commas, key=lambda i: abs(i - mid))
+        else:
+            cut = _best_cut(sent, max_part=max_chars, balance=6.0)  # 화면 단위는 줄보다 뜻을 더 본다
+            if cut is None:
+                cues.append(sent)
+                continue
         queue[:0] = [sent[:cut].strip(), sent[cut:].strip()]
     return cues
 
@@ -59,25 +180,14 @@ def split_cues(text: str, max_chars: int = MAX_CUE_CHARS) -> list[str]:
 def wrap_two_lines(cue: str, line_chars: int = LINE_CHARS) -> str:
     """한 줄을 넘는 자막은 직접 줄을 바꾼다.
     화면 폭에 맡기면 '왜 자꾸 / 아플까요?'처럼 구절 중간에서 줄이 바뀌기 때문.
-    1순위: 가운데 근처의 쉼표 뒤
-    2순위: 한 글자 단어('그', '수' 등) 옆이 아닌 띄어쓰기 중 가운데에 가장 가까운 곳
+    두 줄이 모두 한 줄 폭 안에 드는 자리 중에서 의미상 끊기 좋은 곳을 고른다 (_break_penalty).
     """
     if len(cue) <= line_chars:
         return cue
-    mid = len(cue) / 2
-    spaces = [i for i, ch in enumerate(cue) if ch == " "]
-    if not spaces:
+    cut = _best_cut(cue, max_part=line_chars)
+    if cut is None:
         return cue
-
-    after_comma = [i for i in spaces if cue[i - 1] == "," and abs(i - mid) <= len(cue) * 0.3]
-    if after_comma:
-        cut = min(after_comma, key=lambda i: abs(i - mid))
-    else:
-        def ok(i: int) -> bool:
-            left, right = cue[:i].split(" ")[-1], cue[i + 1:].split(" ")[0]
-            return len(left) > 1 and len(right) > 1
-        cut = min([i for i in spaces if ok(i)] or spaces, key=lambda i: abs(i - mid))
-    return cue[:cut].rstrip() + "\n" + cue[cut + 1:].lstrip()
+    return cue[:cut].rstrip() + "\n" + cue[cut:].lstrip()
 
 
 def _ts(sec: float) -> str:
@@ -156,7 +266,7 @@ def build_srt(narration: str, duration: float, speech_text: Optional[str] = None
     """자막 큐마다 표시 시간을 정해 SRT 문자열 생성.
     글자별 발화 시각이 있으면 실제 말에 맞추고, 없으면 글자 수 비율(공백 제외)로 나눈다.
     첫 자막은 장면 시작부터, 마지막 자막은 장면 끝까지 유지해 자막이 비는 순간이 없게 한다."""
-    cues = split_cues(narration)
+    cues = split_cues(narration, max_cue_chars(line_chars), line_chars)
     starts = _cue_starts_from_speech(narration, cues, speech_text, char_times)
     if starts is None:
         speech = max(duration - END_PAD, 0.5)
@@ -170,7 +280,7 @@ def build_srt(narration: str, duration: float, speech_text: Optional[str] = None
     for i, cue in enumerate(cues):
         start = min(starts[i], duration)
         end = duration if i == len(cues) - 1 else min(max(starts[i + 1], start), duration)
-        lines.append(f"{i + 1}\n{_ts(start)} --> {_ts(end)}\n{wrap_two_lines(cue)}\n")
+        lines.append(f"{i + 1}\n{_ts(start)} --> {_ts(end)}\n{wrap_two_lines(cue, line_chars)}\n")
     return "\n".join(lines)
 
 
