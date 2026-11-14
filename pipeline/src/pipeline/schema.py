@@ -14,6 +14,7 @@ class Scene(BaseModel):
     narration: str                    # TTS용 문장 (숫자를 한글로 풀어 씀: 육십점)
     subtitle_text: Optional[str] = None  # 자막용 문장 (숫자 그대로: 60점). 없으면 narration 사용
     point_ids: list[int] = Field(default_factory=list)  # 이 장면이 다룬 핵심 포인트 번호
+    visual_focus: Optional[str] = None  # 그림의 주인공: 자막 속 낱말 그대로 (그림과 자막이 같은 대상을 가리키는지 확인용)
     image_prompt: str
     numeric_highlight: Optional[NumericHighlight] = None
     image: Optional[str] = None       # job 폴더 기준 상대 경로
@@ -66,7 +67,9 @@ class SceneDraft(BaseModel):
     narration: str = Field(description="TTS가 읽을 문장. 숫자·영문 약어는 읽는 그대로 한글로")
     subtitle_text: str = Field(description="화면 자막 문장. narration과 같은 내용이되 숫자·약어는 원래 표기 그대로")
     point_ids: list[int] = Field(description="이 장면이 다룬 핵심 포인트 번호 (1부터)")
-    image_prompt: str
+    visual_focus: str = Field(
+        description="그림 한가운데 그릴 대상. subtitle_text에 있는 낱말을 글자 그대로 옮겨 적는다 (예: 지하 2층 집)")
+    image_prompt: str = Field(description="visual_focus를 화면 중심에 그리는 영어 그림 설명")
     numeric_highlight: Optional[NumericHighlight] = None
 
 
