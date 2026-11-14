@@ -114,7 +114,16 @@ export default function App() {
           <div className="hero-preview">
             <p className="hero-preview-label"><span className="sq" aria-hidden />서비스 소개</p>
             <div className="hero-media" aria-label="뚝딱쇼츠 서비스 소개 영상 영역">
-              <div className="hero-media-empty"><SketchIcon kind="film" /><span className="intro-placeholder-title">글이 그림이 되고,<br />이야기가 움직이는 곳.</span><span>서비스 소개 영상 준비 중</span></div>
+              <video
+                src="/media/ttukttak-intro.mp4"
+                poster="/media/ttukttak-intro-poster.jpg"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                aria-label="블로그 링크를 드로잉 숏폼으로 바꿔주는 뚝딱쇼츠 서비스 소개"
+              />
             </div>
           </div>
         </section>
