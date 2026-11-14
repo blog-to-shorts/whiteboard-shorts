@@ -71,8 +71,8 @@ function TeamPortrait({ longHair, glasses, variant }: { longHair: boolean; glass
     </>}
     {glasses ? <>
       <rect x="52" y="69" width="23" height="18" rx="7" /><rect x="85" y="69" width="23" height="18" rx="7" /><path d="M75 76h10" />
-      <path d="M59 79q5-6 10 0m22 0q5-6 10 0" strokeWidth="2" />
-    </> : <path d="M57 79q6-7 12 0m22 0q6-7 12 0" strokeWidth="2" />}
+      <ellipse cx="64" cy="78" rx="1.8" ry="3.2" fill="currentColor" stroke="none" /><ellipse cx="96" cy="78" rx="1.8" ry="3.2" fill="currentColor" stroke="none" />
+    </> : <><ellipse cx="64" cy="78" rx="2" ry="3.5" fill="currentColor" stroke="none" /><ellipse cx="96" cy="78" rx="2" ry="3.5" fill="currentColor" stroke="none" /></>}
     <path d="M74 96q6 5 12 0M68 114v12m24-12v12M32 152q3-24 36-26m24 0q33 2 36 26" />
   </svg>;
 }
