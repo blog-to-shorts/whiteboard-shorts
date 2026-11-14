@@ -263,6 +263,7 @@ a:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-of
 .team-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:28px}
 .team-member{border-top:2px solid var(--accent);padding-top:18px}
 .member-number{font-size:17px;color:var(--accent)}
+.team-portrait{display:block;width:min(100%,150px);height:auto;margin:14px auto 6px;color:var(--accent)}
 .team-member h3{font-size:30px;font-weight:400;margin:16px 0 10px}
 .team-member p{font-size:17px;line-height:1.65;color:var(--muted);margin:0}
 .team-member .member-role{font-size:19px;color:var(--ink);margin-bottom:12px}
