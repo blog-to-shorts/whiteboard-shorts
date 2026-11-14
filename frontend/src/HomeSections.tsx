@@ -71,9 +71,9 @@ function TeamPortrait({ longHair, glasses, variant }: { longHair: boolean; glass
     </>}
     {glasses ? <>
       <rect x="52" y="69" width="23" height="18" rx="7" /><rect x="85" y="69" width="23" height="18" rx="7" /><path d="M75 76h10" />
-      <path d="M63 77h1m32 0h1" strokeWidth="4" />
-    </> : <path d="M62 77h1m34 0h1" strokeWidth="4" />}
-    <path d="M70 96q10 9 20 0M68 114v12m24-12v12M32 152q3-24 36-26m24 0q33 2 36 26" />
+      <path d="M59 79q5-6 10 0m22 0q5-6 10 0" strokeWidth="2" />
+    </> : <path d="M57 79q6-7 12 0m22 0q6-7 12 0" strokeWidth="2" />}
+    <path d="M74 96q6 5 12 0M68 114v12m24-12v12M32 152q3-24 36-26m24 0q33 2 36 26" />
   </svg>;
 }
 export function Team() {
