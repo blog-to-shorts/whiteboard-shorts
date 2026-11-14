@@ -4,6 +4,7 @@
 - --public-dir를 job 폴더로 지정 → Remotion에서 staticFile("videos/...")로 바로 참조
 - 결과: jobs/{id}/output.mp4
 """
+import base64
 import json
 import re
 import shutil
@@ -12,13 +13,41 @@ from pathlib import Path
 
 from .. import style as job_style
 from ..config import settings
-from ..schema import Project
+from ..schema import Project, Scene
 from ..utils.ffmpeg import probe_duration
 from ..utils.logger import log
-from .s07_subtitle import final_video_path
+from .s07_subtitle import CONVERTED_ARTWORK_HEIGHT, CONVERTED_ARTWORK_TOP, HEIGHT, WIDTH, final_video_path
 
 COMPOSITION_ID = "WhiteboardVideo"
 OUTPUT_NAME = "output.mp4"
+
+_MONTH_DAY = r"(\d{1,2})월\s*(\d{1,2})일"
+_DATE_RANGE = re.compile(rf"{_MONTH_DAY}\s*부터\s*{_MONTH_DAY}\s*까지")
+_DATE = re.compile(rf"(?:(\d{{4}})년\s*)?{_MONTH_DAY}(?:\s*[월화수목금토일]요일)?")
+_QUANTITY = (
+    r"[+−-]?[0-9]+(?:[,.][0-9]+)*"
+    r"(?:%p?|퍼센트|점|회|번|개|건|명|인|곳|과목|초|분|시간|일|주|개월|년|"
+    r"(?:천|만|억|조)?\s*원|달러|배|kg|km|cm|mm|m|g|L|mL|GB|MB|℃)?"
+)
+_SHORT_VALUE = re.compile(
+    rf"[≥≤<>]?(?:[$₩])?{_QUANTITY}(?:[~–:/×-](?:[$₩])?{_QUANTITY})?",
+    re.IGNORECASE,
+)
+_CONDITION_SYMBOLS = {"이상": "≥", "이하": "≤", "초과": ">", "미만": "<"}
+
+
+def _display_number(value: str) -> str | None:
+    if match := _DATE_RANGE.fullmatch(value):
+        return f"{match[1]}/{match[2]}~{match[3]}/{match[4]}"
+    if match := _DATE.fullmatch(value):
+        date = f"{match[2]}/{match[3]}"
+        return f"{match[1]}/{date}" if match[1] else date
+    if re.search(r"[0-9]\s+[0-9]", value):
+        return None
+    compact = re.sub(r"\s+", "", value).replace("퍼센트", "%")
+    if match := re.search(r"(이상|이하|초과|미만)$", compact):
+        compact = _CONDITION_SYMBOLS[match[1]] + compact[:match.start()]
+    return compact if len(compact) <= 18 and _SHORT_VALUE.fullmatch(compact) else None
 
 
 def _srt_seconds(ts: str) -> float:
@@ -39,29 +68,102 @@ def parse_srt(path: Path) -> list[dict]:
     return cues
 
 
+def _numeric_highlight(scene: Scene, source: str, cues: list[dict]) -> dict | None:
+    highlight = scene.numeric_highlight
+    if not highlight:
+        return None
+    value = " ".join(highlight.value.split())
+    subtitle = " ".join((scene.subtitle_text or scene.narration).split())
+    display = _display_number(value)
+    if not display:
+        return None
+    # 더 큰 수치나 범위의 일부만 강조하지 않는다.
+    pattern = re.compile(
+        rf"(?<![0-9.,~–〜+−-]){re.escape(value)}"
+        r"(?![0-9%]|[.,][0-9]|\s*(?:[~–〜]|-(?=\s*[0-9])|이상|이하|초과|미만))"
+    )
+    if not pattern.search(" ".join(source.split())) or not pattern.search(subtitle):
+        return None
+
+    # SRT 줄바꿈이나 연속 자막에 걸친 값도 실제 표시 구간과 연결한다.
+    text = ""
+    spans = []
+    for cue in cues:
+        if text:
+            text += " "
+        start = len(text)
+        text += " ".join(cue["text"].split())
+        spans.append((start, len(text), cue))
+    matches = list(pattern.finditer(text))
+    if len(matches) != 1:
+        return None
+    match = matches[0]
+    first_cue = next(cue for start, end, cue in spans if start <= match.start() < end)
+    # 자막이 바뀌어도 같은 그림을 쓰는 장면에서는 수치를 유지한다.
+    return {"value": display, "start": first_cue["start"]}
+
+
+def _artwork_bounds(video: Path, duration: float) -> dict:
+    """완성된 드로잉 프레임에서 흰 여백을 제외한 그림의 범위를 찾는다."""
+    width, height = WIDTH // 4, HEIGHT // 4
+    frame = subprocess.run(
+        ["ffmpeg", "-v", "error", "-ss", str(duration * 0.9), "-i", str(video),
+         "-frames:v", "1", "-vf", f"scale={width}:{height},format=gray",
+         "-f", "rawvideo", "pipe:1"],
+        capture_output=True,
+    )
+    if frame.returncode == 0 and len(frame.stdout) == width * height:
+        left, top, right, bottom = width, height, 0, 0
+        for row in range(height):
+            pixels = frame.stdout[row * width:(row + 1) * width]
+            ink = [column for column, pixel in enumerate(pixels) if pixel < 225]
+            if len(ink) >= 2:
+                left, right = min(left, ink[0]), max(right, ink[-1] + 1)
+                top, bottom = min(top, row), row + 1
+        if bottom > top:
+            return {
+                "left": max(0, left * 4 - 8), "top": max(0, top * 4 - 8),
+                "right": min(WIDTH, right * 4 + 8), "bottom": min(HEIGHT, bottom * 4 + 8),
+            }
+    return {"left": 0, "top": CONVERTED_ARTWORK_TOP, "right": WIDTH, "bottom": CONVERTED_ARTWORK_TOP + CONVERTED_ARTWORK_HEIGHT}
+
+
 def build_props(job_dir: Path) -> dict:
     project = Project.load(job_dir / "scenes.json")
+    source_path = job_dir / "source.txt"
+    source = source_path.read_text(encoding="utf-8") if source_path.is_file() else ""
     scenes = []
     for s in project.scenes:
         video = final_video_path(job_dir, s)
         if not video.exists():
             raise FileNotFoundError(f"scene {s.id}: {video.name}이(가) 없습니다. s07을 먼저 실행하세요.")
-        scenes.append({
+        cues = parse_srt(job_dir / s.subtitle)
+        duration = probe_duration(video)
+        scene_props = {
             "id": s.id,
             "narration": s.narration,
             "video": video.relative_to(job_dir).as_posix(),
             # 실제 영상 길이 기준 (음성 길이와 같지만 프레임 반올림 오차를 줄이기 위해)
-            "duration": probe_duration(video),
-            "cues": parse_srt(job_dir / s.subtitle),
-        })
-    # 자막·제목 모양: .env 기본값 + 웹에서 고른 값(jobs/<id>/style.json)
-    show_title = job_style.load(job_dir)["title_show"]
-    return {
-        "title": project.title if show_title else "",
+            "duration": duration,
+            "cues": cues,
+            "artworkBounds": _artwork_bounds(video, duration),
+        }
+        highlight = _numeric_highlight(s, source, cues)
+        if highlight:
+            scene_props["numericHighlight"] = highlight
+        scenes.append(scene_props)
+    saved_style = job_style.load(job_dir)
+    props = {
+        "title": project.title if saved_style["title_show"] else "",
         "fps": project.fps,
         "scenes": scenes,
-        "style": job_style.remotion_style(job_dir),
+        "style": job_style.remotion_style(saved_style),
     }
+    logo = settings.remotion_dir / "public" / "brand" / "smartdongschool-logo.png"
+    if logo.is_file():
+        encoded = base64.b64encode(logo.read_bytes()).decode("ascii")
+        props["introLogo"] = f"data:image/png;base64,{encoded}"
+    return props
 
 
 def run(job_dir: Path, force: bool = False) -> dict:

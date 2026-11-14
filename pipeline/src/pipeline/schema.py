@@ -5,12 +5,17 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class NumericHighlight(BaseModel):
+    value: str = Field(description="원문과 자막에 그대로 들어 있는 숫자와 단위·조건")
+
+
 class Scene(BaseModel):
     id: int
     narration: str                    # TTS용 문장 (숫자를 한글로 풀어 씀: 육십점)
     subtitle_text: Optional[str] = None  # 자막용 문장 (숫자 그대로: 60점). 없으면 narration 사용
     point_ids: list[int] = Field(default_factory=list)  # 이 장면이 다룬 핵심 포인트 번호
     image_prompt: str
+    numeric_highlight: Optional[NumericHighlight] = None
     image: Optional[str] = None       # job 폴더 기준 상대 경로
     audio: Optional[str] = None
     video: Optional[str] = None
@@ -62,6 +67,7 @@ class SceneDraft(BaseModel):
     subtitle_text: str = Field(description="화면 자막 문장. narration과 같은 내용이되 숫자·약어는 원래 표기 그대로")
     point_ids: list[int] = Field(description="이 장면이 다룬 핵심 포인트 번호 (1부터)")
     image_prompt: str
+    numeric_highlight: Optional[NumericHighlight] = None
 
 
 class ScriptDraft(BaseModel):

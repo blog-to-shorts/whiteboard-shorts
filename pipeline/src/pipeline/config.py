@@ -9,11 +9,29 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(ROOT / ".env")
 
+PRESENTER_STYLE_PROMPT = (
+    "When a recurring presenter appears, keep the same young adult in every scene: "
+    "a round face, dot eyes, short side-parted hair with one curved forelock, "
+    "a plain crew-neck T-shirt with rolled sleeves, straight trousers, and low-top sneakers. "
+    "Keep the same face shape, hairstyle, clothes, and body proportions across poses"
+)
+
 
 def _path(key: str, default: str) -> Path:
     """.env의 상대 경로를 실행 위치와 상관없이 프로젝트 루트 기준으로 해석."""
     p = Path(os.getenv(key, default))
     return p if p.is_absolute() else (ROOT / p).resolve()
+
+
+def _float(key: str, default: float) -> float:
+    """.env의 숫자 값. 없거나 비어 있으면 default"""
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        raise ValueError(f".env의 {key} 값이 숫자가 아닙니다: {raw!r}") from None
 
 
 @dataclass(frozen=True)
@@ -33,6 +51,26 @@ class Settings:
     # ElevenLabs 1,000자당 가격(USD). 요금제마다 달라서 직접 넣는다. 비우면 비용 '미확인'
     elevenlabs_usd_per_1k_chars: Optional[float] = (
         float(os.getenv("ELEVENLABS_USD_PER_1K_CHARS")) if os.getenv("ELEVENLABS_USD_PER_1K_CHARS") else None)
+    # voice_settings (0~1). 비우면 기본값. 범위는 TTS 호출 직전에 검사한다 (tts/elevenlabs.py)
+    elevenlabs_stability: float = field(default_factory=lambda: _float("ELEVENLABS_STABILITY", 0.5))
+    elevenlabs_similarity: float = field(default_factory=lambda: _float("ELEVENLABS_SIMILARITY", 0.75))
+    # 1이면 ElevenLabs 원본 mp3와 원본 기준 글자 시각(.align.json)을 지우지 않는다 (숨소리 자르기 기준 실험용)
+    keep_raw_tts: bool = os.getenv("KEEP_RAW_TTS", "0") == "1"
+    # 장면 음성 앞뒤 무음 자르기 (utils/ffmpeg.py의 to_wav). 비우면 기본값
+    silence_db: float = field(default_factory=lambda: _float("SILENCE_DB", -45.0))  # 앞: 이보다 작으면 무음
+    tail_silence_db: float = field(default_factory=lambda: _float("TAIL_SILENCE_DB", -33.0))  # 끝: 숨소리까지 무음으로
+    tail_sec: float = field(default_factory=lambda: _float("TAIL_SEC", 0.25))  # 장면 끝에 붙이는 무음
+    keep_sec: float = field(default_factory=lambda: _float("KEEP_SEC", 0.02))  # 소리가 끝난 뒤 남기는 여유
+    fade_sec: float = field(default_factory=lambda: _float("FADE_SEC", 0.04))  # 끝 페이드아웃
+    # 글자별 시각이 있을 때: 마지막 글자 끝 + 여유까지는 자르지 않고, + 최대 허용을 넘는 소리(끝 잡음)는 잘라낸다
+    tail_guard_sec: float = field(default_factory=lambda: _float("TAIL_GUARD_SEC", 0.08))
+    tail_max_sec: float = field(default_factory=lambda: _float("TAIL_MAX_SEC", 0.30))
+    # 장면 음성 소리 크기 맞추기 (LUFS). off면 끄기. 최대값(PEAK_DB, dBFS)을 넘는 부분만 짧게 눌러 막는다
+    target_lufs: Optional[float] = field(default_factory=lambda: None if os.getenv("TARGET_LUFS", "").strip().lower() == "off"
+                                         else _float("TARGET_LUFS", -14.0))
+    peak_db: float = field(default_factory=lambda: _float("PEAK_DB", -1.0))
+    # 자막을 실제 말보다 먼저 띄우는 시간(초). 기본 0 (첫 자막은 항상 장면 시작)
+    subtitle_lead_sec: float = field(default_factory=lambda: _float("SUBTITLE_LEAD_SEC", 0.0))
 
     # 경로
     jobs_dir: Path = field(default_factory=lambda: _path("JOBS_DIR", "./jobs"))
@@ -53,9 +91,7 @@ class Settings:
     style_prompt: str = (
         "Simple black and white whiteboard doodle, hand-drawn with a thick black marker, "
         "uniform bold line weight, minimal details, cartoon style, pure white background, "
-        "no shading, no color, no fine technical details. "
-        "If a person appears, always draw the same character: a young adult with short neat hair, "
-        "plain t-shirt and pants, simple round face"
+        "no shading, no color, no fine technical details"
     )
     parallel_workers: int = 4
 
@@ -70,6 +106,7 @@ class Settings:
 
     # 드로잉 순서: GPT가 그림을 보고 "무엇부터 그릴지"를 정한다. 0이면 기본(위→아래) 순서
     draw_order: bool = os.getenv("DRAW_ORDER", "1") != "0"
+    marker_colors: bool = os.getenv("MARKER_COLORS", "1") != "0"
 
     # 대본 수치·조건 원문 대조 검증. 0이면 끔
     fact_check: bool = os.getenv("FACT_CHECK", "1") != "0"
@@ -86,18 +123,11 @@ class Settings:
     subtitle_size: int = int(os.getenv("SUBTITLE_SIZE", "56"))  # px (1080 기준)
     subtitle_weight: int = int(os.getenv("SUBTITLE_WEIGHT", "800"))
     subtitle_color: str = os.getenv("SUBTITLE_COLOR", "#111111")
-    # 화면 아래에서 자막 아랫변까지 거리. 쇼츠 재생바·버튼 영역(아래 약 350px)을 피한다
-    subtitle_bottom: int = int(os.getenv("SUBTITLE_BOTTOM", "400"))
-
-    # 그림 배치 (1080x1920 안). 제목·자막 자리를 비우려고 그림을 줄여 가운데에 둔다
-    image_height: int = int(os.getenv("IMAGE_HEIGHT", "1000"))
-    image_top: int = int(os.getenv("IMAGE_TOP", "360"))
 
     # 상단 제목 (project.title = 분석 단계에서 LLM이 만든 20자 이내 제목)
     title_show: bool = os.getenv("TITLE_SHOW", "1") != "0"
     title_font: str = os.getenv("TITLE_FONT", "")  # 비우면 자막 폰트와 같게
     title_size: int = int(os.getenv("TITLE_SIZE", "80"))  # 긴 제목은 자동으로 줄어든다
     title_color: str = os.getenv("TITLE_COLOR", "#111111")
-    title_top: int = int(os.getenv("TITLE_TOP", "150"))  # 쇼츠 상단 UI(검색·메뉴) 아래
 
 settings = Settings()

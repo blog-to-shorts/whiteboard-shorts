@@ -3,6 +3,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+from pipeline.style import SUBTITLE_BOTTOM_RANGE
+
 JobStatus = Literal["queued", "running", "done", "error"]
 
 
@@ -45,7 +47,7 @@ class JobStyle(BaseModel):
     subtitle_font: str = ""
     subtitle_size: int = 56
     subtitle_color: str = "#111111"  # #RRGGBB
-    subtitle_bottom: int = 400       # 화면 아래에서 자막 아랫변까지(px, 1920 기준)
+    subtitle_bottom: int = SUBTITLE_BOTTOM_RANGE[0]       # 화면 아래에서 자막 아랫변까지(px, 1920 기준)
     title_show: bool = True
     title_font: str = ""
     title_size: int = 80

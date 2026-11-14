@@ -31,12 +31,55 @@ def _image_text_pattern() -> re.Pattern:
     path = Path(__file__).resolve().parents[1] / "prompts" / "image_text_words.txt"
     words = [w.split("#")[0].strip() for w in path.read_text(encoding="utf-8").splitlines()]
     words = [re.escape(w) for w in words if w]
-    fixed = [r"\b\d+\b", r"[\"“”‘’][^\"“”‘’]+[\"“”‘’]", r"[가-힣]+"]
+    fixed = [
+        r"\d+",
+        r'"[^"\n]+"|“[^”\n]+”|‘[^’\n]+’',
+        r"(?<!\w)'[^'\n]+'(?!\w)",
+        r"[가-힣]+",
+    ]
     word_part = [rf"\b(?:{'|'.join(words)})\b"] if words else []
     return re.compile("|".join(fixed + word_part), re.IGNORECASE)
 
 
 IMAGE_TEXT = _image_text_pattern()
+DIMENSION_MODIFIER = re.compile(
+    r"\b([23])D(?=\s+(?:(?:solid|CAD|mechanical)\s+)?"
+    r"(?:diagrams?|drawings?|geometry|models?|renders?|shapes?|views?)\b)",
+    re.IGNORECASE,
+)
+TEXT_EXCLUSION_TERMS = r"(?:text|writing|lettering|letters?|numbers?|numerals?|words?|captions?|labels?|logos?|watermarks?)"
+TRAILING_TEXT_EXCLUSION = re.compile(
+    r"(?:"
+    r"(?:\s*[,.;]\s*no\s+|(?:\s*[,.;]\s*|\s+)without\s+(?:any\s+)?)"
+    rf"{TEXT_EXCLUSION_TERMS}"
+    rf"(?:(?:\s*,\s*(?:(?:and|or)\s+)?|\s+(?:and|or)\s+){TEXT_EXCLUSION_TERMS})*"
+    r")+"
+    r"\s*[.!]?\s*$",
+    re.IGNORECASE,
+)
+LAYOUT_PLACEHOLDERS = {
+    "text frame": "empty layout frame",
+    "text frames": "empty layout frames",
+    "text box": "empty layout box",
+    "text boxes": "empty layout boxes",
+    "text block": "block of parallel bars",
+    "text blocks": "blocks of parallel bars",
+    "image and text blocks": "image frames and blocks of parallel bars",
+    "text formatting": "bar spacing and line weights",
+    "repeated paragraphs and letters": "matching bars and small geometric shapes",
+}
+LAYOUT_TERM = re.compile(rf"\b(?:{'|'.join(LAYOUT_PLACEHOLDERS)})\b", re.IGNORECASE)
+
+
+def _normalize_image_prompts(draft: ScriptDraft) -> None:
+    """형태 약어와 편집 용어를 시각 요소로 바꾸고 중복된 글자 금지 문구를 덜어낸다."""
+    for scene in draft.scenes:
+        prompt = DIMENSION_MODIFIER.sub(
+            lambda match: "two-dimensional" if match[1] == "2" else "three-dimensional",
+            scene.image_prompt,
+        )
+        prompt = LAYOUT_TERM.sub(lambda match: LAYOUT_PLACEHOLDERS[match[0].lower()], prompt)
+        scene.image_prompt = TRAILING_TEXT_EXCLUSION.sub("", prompt)
 
 
 def _total_range(target_chars: Optional[int] = None) -> tuple[int, int]:
@@ -95,6 +138,11 @@ def _violations(draft: ScriptDraft, n_points: int, t_range: tuple[int, int],
     return errs
 
 
+def _draft_score(draft: ScriptDraft, errors: list[str]) -> tuple[int, int]:
+    # 전체 위반 수가 같으면 그림 속 글자를 유도하는 장면이 적은 대본을 선택한다.
+    return len(errors), sum(bool(IMAGE_TEXT.search(scene.image_prompt)) for scene in draft.scenes)
+
+
 def _fact_issues(draft: ScriptDraft, source: str, total: dict) -> list[str]:
     """자막용 문장(숫자가 원래 표기로 남아 있음)을 원문과 대조해 수치·조건 오류 목록을 돌려준다."""
     payload = {
@@ -121,6 +169,7 @@ def _build_project(draft: ScriptDraft, analysis: Analysis, source_url: Optional[
             subtitle_text=s.subtitle_text.strip() or None,
             point_ids=sorted(set(s.point_ids)),
             image_prompt=s.image_prompt.strip(),
+            numeric_highlight=s.numeric_highlight,
             image=f"assets/images/scene_{i:02d}.png",
             audio=f"assets/audio/scene_{i:02d}.wav",
             video=f"videos/scene_{i:02d}.mp4",
@@ -179,10 +228,11 @@ def run(job_dir: Path, source_url: Optional[str] = None, feedback: str = "",
     best, best_errs = None, None
     for attempt in range(1, MAX_ATTEMPTS + 1):
         draft, usage = parse(system, user, ScriptDraft)
+        _normalize_image_prompts(draft)
         total["input_tokens"] += usage["input_tokens"]
         total["output_tokens"] += usage["output_tokens"]
         errs = _violations(draft, n_points, (t_lo, t_hi), has_def)
-        if best is None or len(errs) < len(best_errs):  # 위반이 가장 적은 결과를 남긴다
+        if best is None or _draft_score(draft, errs) < _draft_score(best, best_errs):
             best, best_errs = draft, errs
         if not errs:
             break
@@ -201,13 +251,14 @@ def run(job_dir: Path, source_url: Optional[str] = None, feedback: str = "",
             fix_user = user + "\n\n[원문과 다른 수치·조건 — 반드시 원문대로 수정]\n" + "\n".join(fact_issues)
             try:
                 draft, usage = parse(system, fix_user, ScriptDraft)
+                _normalize_image_prompts(draft)
                 total["input_tokens"] += usage["input_tokens"]
                 total["output_tokens"] += usage["output_tokens"]
                 errs = _violations(draft, n_points, (t_lo, t_hi), has_def)
             except Exception as e:  # 재작성이 실패해도 기존 대본으로 계속 진행
                 log.warning(f"[s03] 수치 오류 재작성 실패 → 기존 대본 유지 ({e})")
                 draft, errs = None, best_errs + ["재작성 실패"]
-            if draft is not None and len(errs) <= len(best_errs):  # 길이·포인트 규칙을 더 어기지 않을 때만 교체
+            if draft is not None and _draft_score(draft, errs) <= _draft_score(best, best_errs):
                 best, best_errs = draft, errs
                 fact_issues = _fact_issues(best, full_source, total)
             elif draft is not None:
@@ -220,6 +271,9 @@ def run(job_dir: Path, source_url: Optional[str] = None, feedback: str = "",
             log.info("[s03] 수치·조건 검증 통과")
 
     project = _build_project(best, analysis, source_url)
+    if fact_issues:
+        for scene in project.scenes:
+            scene.numeric_highlight = None
     project.save(out)
     chars = sum(len(s.narration) for s in project.scenes)
     covered = {p for s in project.scenes for p in s.point_ids} & set(range(1, n_points + 1))

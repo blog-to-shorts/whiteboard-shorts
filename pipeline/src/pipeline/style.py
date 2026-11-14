@@ -110,7 +110,9 @@ for _key, _label, _family, _group, _generic, _url in NOONNU:
 
 SUBTITLE_SIZE_RANGE = (36, 96)
 TITLE_SIZE_RANGE = (48, 140)
-SUBTITLE_BOTTOM_RANGE = (100, 1000)  # 100이면 맨 아래(재생바에 가려짐), 1000이면 화면 가운데쯤
+# remotion/src/layout.ts의 안전 영역, 텍스트 패딩과 같은 값이다.
+SUBTITLE_TEXT_WIDTH = 680
+SUBTITLE_BOTTOM_RANGE = (696, 796)
 
 
 def defaults() -> dict:
@@ -118,7 +120,7 @@ def defaults() -> dict:
         "subtitle_font": "",  # 빈 값 = .env의 SUBTITLE_FONT
         "subtitle_size": settings.subtitle_size,
         "subtitle_color": settings.subtitle_color,
-        "subtitle_bottom": settings.subtitle_bottom,  # 화면 아래에서 자막 아랫변까지(px)
+        "subtitle_bottom": SUBTITLE_BOTTOM_RANGE[0],  # 화면 아래에서 자막 아랫변까지(px)
         "title_show": settings.title_show,
         "title_font": "",     # 빈 값 = 자막 글꼴과 같게
         "title_size": settings.title_size,
@@ -134,6 +136,8 @@ def load(job_dir: Path) -> dict:
         style.update({k: v for k, v in saved.items() if k in style and v is not None})
     except (FileNotFoundError, json.JSONDecodeError):
         pass
+    lo, hi = SUBTITLE_BOTTOM_RANGE
+    style["subtitle_bottom"] = max(lo, min(hi, int(style["subtitle_bottom"])))
     return style
 
 
@@ -173,13 +177,12 @@ def google_spec(key: str) -> str:
 
 
 def line_chars(subtitle_size: int) -> int:
-    """자막 한 줄 글자 수. 1080px 폭에서 글씨 56일 때 19자 기준으로 비례"""
-    return max(8, round(19 * 56 / subtitle_size))
+    """안전 영역 안에서 자막 패딩을 제외한 폭 기준으로 한 줄 글자 수를 추정한다."""
+    return max(1, SUBTITLE_TEXT_WIDTH // subtitle_size)
 
 
-def remotion_style(job_dir: Path) -> dict:
+def remotion_style(st: dict) -> dict:
     """s08이 Remotion props.style로 넘기는 값"""
-    st = load(job_dir)
     sub_font = font_css(st["subtitle_font"], settings.subtitle_font)
     title_key = st["title_font"] or st["subtitle_font"]
     title_font = font_css(title_key, settings.title_font or sub_font)
@@ -197,7 +200,6 @@ def remotion_style(job_dir: Path) -> dict:
             "font": title_font,
             "size": st["title_size"],
             "color": st["title_color"],
-            "top": settings.title_top,
             "google": google_spec(title_key),
             "url": font_url(title_key),
         },

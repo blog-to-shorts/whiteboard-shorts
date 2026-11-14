@@ -1,3 +1,5 @@
+import { DEFAULT_SUBTITLE_BOTTOM } from "./layout";
+
 // scenes.json → s08_render.py가 Remotion에 넘기는 props 형식.
 // pipeline/src/pipeline/schema.py와 필드 이름을 맞춘다.
 
@@ -13,6 +15,8 @@ export type SceneProps = {
   video: string; // public 폴더(= job 폴더) 기준 경로, 예: videos/scene_01.1080.mp4
   duration: number; // 초 (실제 음성 길이)
   cues: Cue[];
+  numericHighlight?: { value: string; start: number };
+  artworkBounds?: { left: number; top: number; right: number; bottom: number };
 };
 
 // 자막·제목 모양. .env(SUBTITLE_*, TITLE_*) → config.py → s08_render.py로 들어온다.
@@ -31,7 +35,6 @@ export type TitleStyle = {
   font: string;
   size: number; // px. 긴 제목은 자동으로 줄어든다
   color: string;
-  top: number; // 화면 위에서 제목 윗변까지(px)
   google?: string;
   url?: string;
 };
@@ -44,8 +47,8 @@ export type VideoStyle = {
 const FONT = "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif";
 
 export const DEFAULT_STYLE: VideoStyle = {
-  subtitle: { font: FONT, size: 56, weight: 800, color: "#111111", bottom: 400 },
-  title: { font: FONT, size: 80, color: "#111111", top: 150 },
+  subtitle: { font: FONT, size: 56, weight: 800, color: "#111111", bottom: DEFAULT_SUBTITLE_BOTTOM },
+  title: { font: FONT, size: 80, color: "#111111" },
 };
 
 export const resolveStyle = (style?: Partial<{ subtitle: Partial<SubtitleStyle>; title: Partial<TitleStyle> }>): VideoStyle => ({
@@ -58,4 +61,5 @@ export type VideoProps = {
   fps: number;
   scenes: SceneProps[];
   style?: Partial<{ subtitle: Partial<SubtitleStyle>; title: Partial<TitleStyle> }>;
+  introLogo?: string;
 };

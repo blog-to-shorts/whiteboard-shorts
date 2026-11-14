@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, FontInfo, Job, JobStyle } from "./api";
 import { ColorPalette } from "./ColorPalette";
+import logo from "../../remotion/public/brand/smartdongschool-logo.png?url";
+import {
+  DEFAULT_SUBTITLE_BOTTOM, LOGO_LEFT, LOGO_WIDTH, MAX_SUBTITLE_BOTTOM, SAFE_HEIGHT,
+  safeInsets, subtitleLayout, subtitleLineChars as lineChars, TEXT_PADDING,
+  TITLE_LINE_HEIGHT, titleLayout, VIDEO_HEIGHT as H, VIDEO_WIDTH as W,
+} from "../../remotion/src/layout";
 
 // 자막·제목 모양 고르기. 오른쪽 미리보기는 실제 영상(1080×1920) 배치를 줄여 그린 것이고,
 // "다시 만들기"를 누르면 자막·영상 합성만 다시 해서(API 비용 없음) 영상에 반영한다.
-// 배치 숫자는 pipeline config.py 기본값과 같다 (IMAGE_TOP 360 / IMAGE_HEIGHT 1000 / SUBTITLE_BOTTOM 400 / TITLE_TOP 150)
-const W = 1080, H = 1920, IMG_TOP = 360, IMG_H = 1000, IMG_W = Math.round((IMG_H * 854) / 1280), TITLE_TOP = 150;
-// 자막 위치(화면 아래에서 자막 아랫변까지, px). 쇼츠는 아래 약 320px를 재생바·채널명·버튼이 덮는다
-const SHORTS_UI = 320, BOTTOM_MIN = 100, BOTTOM_MAX = 1000, BOTTOM_DEFAULT = 400;
+const BOTTOM_MIN = DEFAULT_SUBTITLE_BOTTOM;
+const BOTTOM_MAX = MAX_SUBTITLE_BOTTOM;
+const BOTTOM_DEFAULT = DEFAULT_SUBTITLE_BOTTOM;
 const SCALE = 0.25;
 const DEFAULT_CSS = "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif";
 const DEFAULT: JobStyle = {
@@ -36,22 +41,13 @@ function loadGoogleFont(font?: FontInfo) {
   document.head.appendChild(link);
 }
 
-// pipeline s07과 같은 기준: 1080px 폭에서 글씨 56일 때 한 줄 19자
-const lineChars = (size: number) => Math.max(8, Math.round((19 * 56) / size));
-
-// 첫 장면 자막 앞부분을 실제 영상처럼 최대 두 줄로 나눠 보여 준다
+// 첫 장면 자막 앞부분으로 글꼴과 줄바꿈을 확인한다.
 function wrapSample(text: string, chars: number) {
-  const lines: string[] = [];
-  let cur = "";
-  for (const w of text.split(/\s+/)) {
-    if (cur && (cur + " " + w).length > chars) {
-      lines.push(cur);
-      cur = w;
-      if (lines.length === 2) break;
-    } else cur = cur ? `${cur} ${w}` : w;
-  }
-  if (lines.length < 2 && cur) lines.push(cur);
-  return lines.slice(0, 2).join("\n");
+  const sample = text.trim();
+  if (sample.length <= chars) return sample;
+  const breakAt = sample.lastIndexOf(" ", chars);
+  const cut = breakAt > 0 ? breakAt : chars;
+  return sample.slice(0, cut) + "\n" + sample.slice(cut).trimStart().slice(0, chars).trimEnd();
 }
 
 // 글꼴 목록을 고딕·명조·제목용·손글씨로 묶어 보여 준다
@@ -97,14 +93,14 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
     loadGoogleFont(titleFont);
   }, [subFont, titleFont]);
 
+  const drag = useRef<{ y: number; bottom: number } | null>(null);
   if (job.scenes.length === 0) return null;
   const locked = job.status === "queued" || job.status === "running";
   const changed = JSON.stringify(draft) !== savedKey;
   const set = <K extends keyof JobStyle>(k: K, v: JobStyle[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  const clampBottom = (v: number) => Math.max(BOTTOM_MIN, Math.min(BOTTOM_MAX, Math.round(v / 10) * 10));
+  const clampBottom = (v: number) => Math.max(BOTTOM_MIN, Math.min(BOTTOM_MAX, BOTTOM_MIN + Math.round((v - BOTTOM_MIN) / 10) * 10));
 
   // 미리보기에서 자막을 위아래로 끌어 옮긴다 (화면 1px = 실제 영상 1/SCALE px)
-  const drag = useRef<{ y: number; bottom: number } | null>(null);
   const onDragStart = (e: React.PointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
     drag.current = { y: e.clientY, bottom: draft.subtitle_bottom };
@@ -119,20 +115,13 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
 
   const firstSub = job.scenes[0].subtitle_text ?? job.scenes[0].narration;
   const sample = wrapSample(firstSub, lineChars(draft.subtitle_size));
-  // 자막이 재생바에 가려지거나 그림과 겹치는지 어림한다 (줄 수 × 글씨 크기 × 줄 간격 1.35)
-  const subHeight = sample.split("\n").length * draft.subtitle_size * 1.35;
-  const subTop = H - draft.subtitle_bottom - subHeight;
-  const posWarn = draft.subtitle_bottom < SHORTS_UI
-      ? "쇼츠 재생바·버튼에 가려질 수 있어요"
-      : subTop < IMG_TOP + IMG_H
-          ? "그림 아래쪽과 겹쳐요"
-          : null;
   const subCss = subFont?.css ?? DEFAULT_CSS;
   const titleCss = titleFont?.css ?? subCss;
-  // 긴 제목은 Remotion Title과 같은 방식으로 줄어든다
-  const title = job.title ?? "제목";
-  const units = [...title].reduce((w, ch) => w + (ch === " " ? 0.35 : /[\x00-\x7F]/.test(ch) ? 0.6 : 1), 0);
-  const titleSize = Math.round(Math.max(draft.title_size * 0.7, Math.min(draft.title_size, 960 / Math.max(units, 1))));
+  const title = draft.title_show ? job.title ?? "" : "";
+  const heading = titleLayout(title, draft.title_size, true);
+  const subtitle = subtitleLayout(draft.subtitle_size, draft.subtitle_bottom);
+  const artworkTop = heading.top + heading.height;
+  const artworkHeight = SAFE_HEIGHT - artworkTop - subtitle.space;
 
   const apply = async () => {
     setBusy(true);
@@ -187,7 +176,6 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
                        onChange={(e) => set("subtitle_bottom", Number(e.target.value))} />
                 <small>위</small>
               </span>
-              {posWarn && <span className="warn">⚠ {posWarn}</span>}
             </label>
             <label className="check">
               <input type="checkbox" checked={draft.title_show} onChange={(e) => set("title_show", e.target.checked)} />
@@ -226,15 +214,28 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
           </div>
 
           <div className="style-preview" style={{ width: W * SCALE, height: H * SCALE }} aria-label="자막 미리보기">
-            {draft.title_show && (
-                <div className="sp-title" style={{ top: TITLE_TOP * SCALE, fontFamily: titleCss, fontSize: titleSize * SCALE, color: draft.title_color }}>{title}</div>
-            )}
-            <div className="sp-image" style={{ top: IMG_TOP * SCALE, height: IMG_H * SCALE, width: IMG_W * SCALE }}>그림</div>
-            <div className={`sp-sub${posWarn ? " warn" : ""}`}
-                 onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}
-                 title="위아래로 끌어서 위치를 바꿀 수 있어요"
-                 style={{ bottom: draft.subtitle_bottom * SCALE, fontFamily: subCss, fontSize: draft.subtitle_size * SCALE, color: draft.subtitle_color }}>{sample}</div>
-            <div className="sp-ui" style={{ height: SHORTS_UI * SCALE }}>쇼츠 재생바·버튼 영역</div>
+            <div className="sp-safe" style={{
+              top: safeInsets.top * SCALE, right: safeInsets.right * SCALE,
+              bottom: safeInsets.bottom * SCALE, left: safeInsets.left * SCALE,
+            }}>
+              <img className="sp-logo" src={logo} alt="스마트동스쿨" style={{ left: LOGO_LEFT * SCALE, width: LOGO_WIDTH * SCALE }} />
+              {title && <div className="sp-title" style={{
+                top: heading.top * SCALE, left: TEXT_PADDING * SCALE, right: TEXT_PADDING * SCALE,
+                fontFamily: titleCss, fontSize: heading.size * SCALE, color: draft.title_color,
+                lineHeight: TITLE_LINE_HEIGHT, WebkitLineClamp: heading.lines,
+              }}>{title}</div>}
+              <div className="sp-image" style={{
+                top: artworkTop * SCALE, height: artworkHeight * SCALE, width: artworkHeight * 2 / 3 * SCALE,
+              }}>그림 배치 영역</div>
+              <div className="sp-sub"
+                onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}
+                title="위아래로 끌어서 위치를 바꿀 수 있어요"
+                style={{
+                  bottom: subtitle.offset * SCALE, left: TEXT_PADDING * SCALE, right: TEXT_PADDING * SCALE,
+                  fontFamily: subCss, fontSize: draft.subtitle_size * SCALE, color: draft.subtitle_color,
+                }}>{sample}</div>
+            </div>
+            <div className="sp-ui" style={{ height: safeInsets.bottom * SCALE }}>쇼츠·릴스·틱톡 UI 영역</div>
           </div>
         </div>
       </div>
