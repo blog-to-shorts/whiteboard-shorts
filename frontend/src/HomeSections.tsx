@@ -78,18 +78,19 @@ function TeamPortrait({ longHair, glasses, variant }: { longHair: boolean; glass
 }
 export function Team() {
   const members = [
-    ["이지아", "통합 · 이식", "각자의 결과물을 하나의 흐름으로"],
-    ["엄세훈", "대본", "이야기의 핵심을 정확하게"],
     ["김진선", "화풍 · 이미지", "한 장면씩, 일관된 그림으로"],
-    ["홍영준", "TTS · 음성", "듣기 편안한 목소리로"],
+    ["엄세훈", "대본", "이야기의 핵심을 정확하게"],
+    ["이지아", "기술 기획・통합/배포", "각자의 결과물을 하나의 흐름으로"],
     ["최민주", "웹 UI · 발표", "서비스의 첫인상부터 전달까지"],
+    ["홍영준", "TTS · 음성", "듣기 편안한 목소리로"],
   ];
+  const portraitVariants: Record<string, number> = { "이지아": 0, "엄세훈": 1, "김진선": 2, "홍영준": 3, "최민주": 4 };
   return <section className="home-section team-section" id="team" aria-labelledby="team-title">
     <p className="section-eyebrow">PEOPLE / 만든 사람들</p><h2 id="team-title">다섯 사람의 손길로, 뚝딱.</h2>
     <p className="team-intro">스마트동스쿨 기업 실무 프로젝트 · AI 서비스 개발 2조</p>
     <div className="team-grid">{members.map(([name, role, description], i) => <article className="team-member" key={name}>
       <span className="member-number">0{i + 1}</span>
-      <TeamPortrait longHair={i === 0 || i === 2 || i === 4} glasses={name === "홍영준"} variant={i} />
+      <TeamPortrait longHair={name === "김진선" || name === "이지아" || name === "최민주"} glasses={name === "홍영준"} variant={portraitVariants[name]} />
       <h3>{name}</h3><p className="member-role">{role}</p><p>{description}</p>
       {name === "최민주" && <a className="member-email" href="mailto:0987cms@naver.com">0987cms@naver.com <span aria-hidden>↗</span></a>}
     </article>)}</div>
