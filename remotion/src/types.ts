@@ -13,10 +13,13 @@ export type SceneProps = {
   video: string; // public 폴더(= job 폴더) 기준 경로, 예: videos/scene_01.1080.mp4
   duration: number; // 초 (실제 음성 길이)
   cues: Cue[];
+  numericHighlight?: { value: string; start: number };
+  artworkBounds?: { left: number; top: number; right: number; bottom: number };
 };
 
 export type VideoProps = {
   title: string;
   fps: number;
   scenes: SceneProps[];
+  introLogo?: string;
 };

@@ -1,7 +1,7 @@
 # 이미지 프롬프트에 들어가면 그림 속에 글자가 생기기 쉬운 영어 단어 (한 줄에 하나, # 뒤는 설명)
 # 대본 검사(s03)가 이 단어를 찾으면 "글자 없이 사물·행동·화살표로 표현하라"며 대본을 다시 요청한다.
 # 화풍 담당이 테스트하면서 추가·삭제하면 된다. 대소문자 구분 없음, 단어 단위로 찾음.
-# 숫자(3, 60 등)·따옴표·한글은 이 목록과 별도로 항상 검사한다.
+# 숫자(3, 60, A4 등)·따옴표 안 문구·한글은 이 목록과 별도로 항상 검사한다.
 #
 logo
 logos
@@ -32,3 +32,27 @@ letters
 # 공통 금지 (script.md 규칙과 같음)
 sign
 signs
+signage
+signboard
+signboards
+signpost
+signposts
+billboard
+billboards
+headline
+headlines
+typography
+watermark
+watermarks
+inscription
+inscriptions
+nameplate
+nameplates
+name tag
+name tags
+speech bubble
+speech bubbles
+text box
+text boxes
+wordmark
+wordmarks

@@ -14,9 +14,9 @@ TEXT_PRICES: dict[str, tuple[float, float]] = {
     "gpt-5.4-mini": (0.75, 4.50),
 }
 
-# 이미지 모델: 프롬프트(텍스트 입력) / 생성된 이미지(이미지 출력) 1M 토큰당 USD
-IMAGE_PRICES: dict[str, tuple[float, float]] = {
-    "gpt-image-2": (5.00, 30.00),
+# 이미지 모델: 텍스트 입력 / 참조 이미지 입력 / 이미지 출력 1M 토큰당 USD
+IMAGE_PRICES: dict[str, tuple[float, float, float]] = {
+    "gpt-image-2": (2.50, 4.00, 15.00),
 }
 
 
@@ -27,11 +27,11 @@ def _text_cost(model: str, input_tokens: int, output_tokens: int) -> Optional[fl
     return (input_tokens * p[0] + output_tokens * p[1]) / 1_000_000
 
 
-def _image_cost(model: str, input_tokens: int, output_tokens: int) -> Optional[float]:
+def _image_cost(model: str, input_tokens: int, reference_tokens: int, output_tokens: int) -> Optional[float]:
     p = IMAGE_PRICES.get(model)
     if p is None:
         return None
-    return (input_tokens * p[0] + output_tokens * p[1]) / 1_000_000
+    return (input_tokens * p[0] + reference_tokens * p[1] + output_tokens * p[2]) / 1_000_000
 
 
 def _tts_cost(characters: int) -> Optional[float]:
@@ -46,8 +46,12 @@ def step_cost(entry: dict) -> tuple[str, Optional[float]]:
     if name == "s04_image":
         if entry.get("images", 0) and not entry.get("image_output_tokens"):
             return "image", None  # 이미지를 만들었는데 사용량 기록이 없음 (이 코드 적용 전 기록 등) → 미확인
-        return "image", _image_cost(entry.get("model", ""), entry.get("image_input_tokens", 0),
-                                    entry.get("image_output_tokens", 0))
+        image = _image_cost(entry.get("model", ""), entry.get("image_input_tokens", 0),
+                            entry.get("image_reference_tokens", 0), entry.get("image_output_tokens", 0))
+        review_input = entry.get("review_input_tokens", 0)
+        review_output = entry.get("review_output_tokens", 0)
+        review = _text_cost(entry.get("review_model", ""), review_input, review_output) if review_input or review_output else 0
+        return "image", image + review if image is not None and review is not None else None
     if name == "s05_tts":
         cost = _tts_cost(entry.get("characters", 0))
         regen = entry.get("regen_tokens")  # 길이 초과로 대본을 다시 만든 경우의 텍스트 비용

@@ -1,6 +1,6 @@
 import React from "react";
-import { AbsoluteFill, CalculateMetadataFunction, Series } from "remotion";
-import { SceneClip } from "./components/SceneClip";
+import { AbsoluteFill, CalculateMetadataFunction, Img, Series } from "remotion";
+import { SceneClip, safeInsets } from "./components/SceneClip";
 import type { VideoProps } from "./types";
 
 const secToFrames = (sec: number, fps: number) => Math.max(1, Math.round(sec * fps));
@@ -12,16 +12,23 @@ export const calculateMetadata: CalculateMetadataFunction<VideoProps> = ({ props
     return { fps, durationInFrames: Math.max(durationInFrames, 1) };
 };
 
-export const WhiteboardVideo: React.FC<VideoProps> = ({ scenes, fps }) => {
+export const WhiteboardVideo: React.FC<VideoProps> = ({ scenes, fps, introLogo }) => {
     return (
         <AbsoluteFill style={{ backgroundColor: "white" }}>
             <Series>
                 {scenes.map((scene) => (
                     <Series.Sequence key={scene.id} durationInFrames={secToFrames(scene.duration, fps || 30)}>
-                        <SceneClip scene={scene} />
+                        <SceneClip scene={scene} hasBrandLogo={Boolean(introLogo)} />
                     </Series.Sequence>
                 ))}
             </Series>
+            {introLogo && (
+                <Img
+                    src={introLogo}
+                    alt="스마트동스쿨"
+                    style={{ position: "absolute", top: safeInsets.top, left: safeInsets.left + 8, width: 200 }}
+                />
+            )}
         </AbsoluteFill>
     );
 };

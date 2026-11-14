@@ -114,10 +114,14 @@ python -c "import json,sys; [print(s['id'], s['narration']) for s in json.load(o
 | 02 | `steps/s02_analyze.py` | 제목·요약·주제 정의·핵심 포인트 분석 → `analysis.json` |
 | 03 | `steps/s03_script.py` | 장면별 대본(TTS용·자막용 분리) + 이미지 프롬프트 → `scenes.json`. 장면 수·글자 수·핵심 포인트 누락·그림 속 글자를 코드로 검사해 재요청하고, 수치·조건을 원문과 대조 검증 |
 | 05 | `steps/s05_tts.py` | ElevenLabs 음성 + 실제 길이 측정. 30~60초를 벗어나면 대본을 한 번 다시 만듦 |
-| 04 | `steps/s04_image.py` | 장면별 화이트보드 이미지 (공통 화풍, 병렬 생성) |
-| 06 | `steps/s06_animate.py` | whiteboard-animator 드로잉. GPT가 그림을 보고 그리는 순서를 정함 (`DRAW_ORDER=0`이면 위→아래) |
+| 04 | `steps/s04_image.py` | 공통 화풍으로 장면별 이미지 생성. 설명 인물이 나오는 장면끼리는 같은 이미지 참조를 사용하고, 새 그림에서 글자가 감지되면 한 번 재생성 |
+| 06 | `steps/s06_animate.py` | 그림과 내레이션을 바탕으로 드로잉 순서와 사물별 마커 색을 정함. 반복 사물에는 같은 색을 쓰고, 애매한 선은 검정으로 유지 |
 | 07 | `steps/s07_subtitle.py` | 자막(SRT) + 1080×1920 / 30fps 변환 |
 | 08 | `steps/s08_render.py` | Remotion 최종 합성 → `output.mp4` |
+
+대본에서 고른 핵심 수치가 원문과 해당 자막에 모두 있으면, `42%`, `6회`, `11/5~11/11`처럼 짧은 수치를 해당 자막이 시작될 때부터 장면이 끝날 때까지 그림 아래에 크게 표시합니다. 생성 이미지에는 수치를 넣지 않습니다.
+
+최종 1080×1920 영상은 쇼츠·릴스·틱톡의 버튼과 게시물 정보가 올라오는 가장자리를 고려해 그림·강조 숫자·자막을 위 280px, 아래 680px, 왼쪽 108px, 오른쪽 252px 안쪽에 배치합니다. 자막 글자 크기는 56px로 고정합니다. 기존 작업은 최종 렌더만 다시 실행하면 적용됩니다.
 
 각 단계는 결과 파일이 이미 있으면 건너뜁니다. 단계별 소요 시간·토큰 사용량·오류는 `jobs/<job_id>/log.json`에 남습니다.
 
@@ -127,6 +131,7 @@ python -c "import json,sys; [print(s['id'], s['narration']) for s in json.load(o
 | --- | --- |
 | 대본·분석 규칙 | `pipeline/src/pipeline/prompts/script.md`, `analyze.md` |
 | 드로잉 순서 규칙 | `pipeline/src/pipeline/prompts/regions.md` |
+| 마커 색·그리는 순서 | `.env`의 `MARKER_COLORS=0`으로 마커 끄기, `DRAW_ORDER=0`으로 기본 드로잉 순서 사용 |
 | 화풍 | `pipeline/src/pipeline/config.py`의 `style_prompt` |
 | 그림 속 글자 금지어 | `pipeline/src/pipeline/prompts/image_text_words.txt` |
 | 수치 검증·이미지 흑백 후처리 켜기/끄기 | `.env`의 `FACT_CHECK`, `IMAGE_GRAYSCALE` |

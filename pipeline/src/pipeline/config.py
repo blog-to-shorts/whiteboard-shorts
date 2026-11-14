@@ -9,6 +9,13 @@ from dotenv import load_dotenv
 ROOT = Path(__file__).resolve().parents[3]
 load_dotenv(ROOT / ".env")
 
+PRESENTER_STYLE_PROMPT = (
+    "When a recurring presenter appears, keep the same young adult in every scene: "
+    "a round face, dot eyes, short side-parted hair with one curved forelock, "
+    "a plain crew-neck T-shirt with rolled sleeves, straight trousers, and low-top sneakers. "
+    "Keep the same face shape, hairstyle, clothes, and body proportions across poses"
+)
+
 
 def _path(key: str, default: str) -> Path:
     """.env의 상대 경로를 실행 위치와 상관없이 프로젝트 루트 기준으로 해석."""
@@ -53,9 +60,7 @@ class Settings:
     style_prompt: str = (
         "Simple black and white whiteboard doodle, hand-drawn with a thick black marker, "
         "uniform bold line weight, minimal details, cartoon style, pure white background, "
-        "no shading, no color, no fine technical details. "
-        "If a person appears, always draw the same character: a young adult with short neat hair, "
-        "plain t-shirt and pants, simple round face"
+        "no shading, no color, no fine technical details"
     )
     parallel_workers: int = 4
 
@@ -70,6 +75,7 @@ class Settings:
 
     # 드로잉 순서: GPT가 그림을 보고 "무엇부터 그릴지"를 정한다. 0이면 기본(위→아래) 순서
     draw_order: bool = os.getenv("DRAW_ORDER", "1") != "0"
+    marker_colors: bool = os.getenv("MARKER_COLORS", "1") != "0"
 
     # 대본 수치·조건 원문 대조 검증. 0이면 끔
     fact_check: bool = os.getenv("FACT_CHECK", "1") != "0"
