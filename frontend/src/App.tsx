@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, Job, JobStatus, Scene, STEP_LABELS, STEP_ORDER } from "./api";
+import { FAQ, HowItWorks, SiteFooter, SiteHeader, SketchIcon, Team } from "./HomeSections";
 
-// ---------- 사이트 이름: 여기만 바꾸면 워드마크·탭 제목이 함께 바뀐다 ----------
-// pixel: 픽셀 글꼴로 바꿔 쓸 글자의 위치 (0부터)
+// ---------- 서비스 이름과 소개 문구 ----------
 const BRAND = {
-  top: { word: "SKETCH", pixel: [2, 4] },
-  bottom: { word: "SHORTS", pixel: [2] },
-  role: "Blog-to-Shorts Pipeline",
+  role: "뚝딱쇼츠",
+  tagline: "당신의 블로그를 쇼츠로 그려드립니다.",
 };
 
 const STATUS_LABEL: Record<JobStatus, string> = {
@@ -28,7 +27,7 @@ export default function App() {
   const [reloadKey, setReloadKey] = useState(0); // 장면을 다시 만들면 올려서 상태 갱신을 다시 시작
 
   useEffect(() => {
-    document.title = `${cap(BRAND.top.word)} ${cap(BRAND.bottom.word)}`;
+    document.title = BRAND.role;
   }, []);
 
   const refreshList = useCallback(async () => {
@@ -76,7 +75,6 @@ export default function App() {
     };
   }, [selectedId, reloadKey]);
 
-  const latestDone = jobs.find((j) => j.status === "done") ?? null;
   const running = jobs.find((j) => j.status === "running") ?? null;
   const doneCount = jobs.filter((j) => j.status === "done").length;
 
@@ -95,24 +93,42 @@ export default function App() {
   return (
       <div className="app">
         <div className="grain" aria-hidden />
+        <a className="skip-link" href="#create">쇼츠 만들기로 바로 가기</a>
+        <SiteHeader />
 
-        {/* ---------- 히어로: 거대한 워드마크 + 겹친 영상 ---------- */}
+        {/* ---------- 히어로: 서비스 소개와 영상 미리보기 ---------- */}
         <section className="hero" id="top">
-          <Wordmark {...BRAND.top} className="wm-top" />
-          <div className="hero-media">
-            {latestDone && api.videoUrl(latestDone) ? (
-                <video src={api.videoUrl(latestDone)!} autoPlay muted loop playsInline />
-            ) : (
-                <div className="hero-media-empty">첫 영상을 만들면 여기서 재생돼요</div>
-            )}
-            {latestDone && <span className="media-tag">{latestDone.title}</span>}
+          <SketchIcon kind="paper" className="hero-doodle doodle-paper" />
+          <SketchIcon kind="pen" className="hero-doodle doodle-pen" />
+          <div className="hero-copy">
+            <p className="hero-eyebrow">글 한 편에서 시작하는 작은 스튜디오</p>
+            <p className="hero-tagline">{BRAND.tagline}</p>
+            <h1 className="wordmark">{BRAND.role}</h1>
+            <p className="hero-description">
+              블로그 글 하나로 대본부터 그림, 내레이션, 자막까지.
+              <br />화이트보드 쇼츠를 만들어보세요.
+            </p>
+            <a className="cta hero-start" href="#create">내 블로그로 시작하기 <span aria-hidden>↗</span></a>
+            <p className="hero-handnote">링크 하나면, 이야기가 움직여요 <span aria-hidden>⤴</span></p>
           </div>
-          <Wordmark {...BRAND.bottom} className="wm-bottom" />
-          <span className="sq hero-sq" />
-          <p className="hero-tagline">
-            블로그 글 하나를 넣으면 대본, 그림, 내레이션, 드로잉, 자막까지 자동으로 이어 붙여 30~60초 화이트보드 숏폼을 만듭니다.
-          </p>
+          <div className="hero-preview">
+            <p className="hero-preview-label"><span className="sq" aria-hidden />서비스 소개</p>
+            <div className="hero-media" aria-label="뚝딱쇼츠 서비스 소개 영상 영역">
+              <video
+                src="/media/ttukttak-intro.mp4?v=shorts"
+                poster="/media/ttukttak-intro-poster.jpg?v=shorts"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                aria-label="블로그 링크를 드로잉 쇼츠로 바꿔주는 뚝딱쇼츠 서비스 소개"
+              />
+            </div>
+          </div>
         </section>
+
+        <HowItWorks />
 
         {error && <div className="banner" onClick={() => setError(null)}>{error}</div>}
 
@@ -120,7 +136,7 @@ export default function App() {
         <section className="block create-block" id="create">
           <div className="block-head">
             <span className="sq" />
-            <h2>New Short<sup>{"{01}"}</sup></h2>
+            <h2>이제, 나의 글로 만들어볼까요?<sup>{"{01}"}</sup></h2>
           </div>
           <CreateForm onCreated={onCreated} onError={setError} />
         </section>
@@ -130,14 +146,14 @@ export default function App() {
           <div className="corner-label"><span className="sq" /> {`{01—${pad(jobs.length)}}`}</div>
           <div className="stage">
             <div className="stage-side left">
-              <h2><span className="sq" />Selected Job<sup>{selected ? `{${selected.job_id.slice(-2)}}` : "{—}"}</sup></h2>
+              <h2><span className="sq" />선택한 내 쇼츠<sup>{selected ? `{${selected.job_id.slice(-2)}}` : "{—}"}</sup></h2>
               {selected && <JobMeta job={selected} />}
             </div>
             <div className="stage-center">
               <Player job={selected} />
             </div>
             <div className="stage-side right">
-              <h2>All Jobs<sup>{`{${pad(jobs.length)}}`}</sup></h2>
+              <h2>내가 만든 쇼츠<sup>{`{${pad(jobs.length)}}`}</sup></h2>
               <JobList jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
             </div>
           </div>
@@ -147,7 +163,7 @@ export default function App() {
         {/* ---------- 포인트 컬러 섹션 ---------- */}
         <section className="block accent-block" id="about">
           <h2 className="statement">
-            블로그 한 편이 사람 손을 거치지 않고, 2분 안에 직접 그려지는 숏폼이 됩니다.
+            읽는 이야기에서,<br />보고 듣는 이야기로.
           </h2>
           <div className="about-grid">
             <dl className="about-stats">
@@ -167,15 +183,9 @@ export default function App() {
             </div>
           </div>
         </section>
-
-        {/* ---------- 하단 고정 메뉴 ---------- */}
-        <nav className="dock">
-          <span className="dock-role"><span className="logo-px" /> {BRAND.role}</span>
-          <span className="dock-links">
-          <a href="#create">Create,</a> <a href="#jobs">Jobs,</a> <a href="#about">About</a>
-        </span>
-          <a className="dock-contact" href="http://localhost:8000/docs" target="_blank" rel="noreferrer">API Docs</a>
-        </nav>
+        <FAQ />
+        <Team />
+        <SiteFooter />
 
         {/* 진행 중인 작업 미니 카드 (시안의 오른쪽 아래 썸네일 자리) */}
         {running && (
@@ -188,16 +198,6 @@ export default function App() {
             </button>
         )}
       </div>
-  );
-}
-
-function Wordmark({ word, pixel, className }: { word: string; pixel: number[]; className: string }) {
-  return (
-      <h1 className={`wordmark ${className}`} aria-label={word}>
-        {word.split("").map((ch, i) => (
-            <span key={i} className={pixel.includes(i) ? "px" : undefined}>{ch}</span>
-        ))}
-      </h1>
   );
 }
 
@@ -431,10 +431,6 @@ function SceneRow({ jobId, scene, locked, onRerun }: { jobId: string; scene: Sce
       </span>
       </li>
   );
-}
-
-function cap(w: string) {
-  return w.charAt(0) + w.slice(1).toLowerCase();
 }
 
 function shortUrl(u: string) {
