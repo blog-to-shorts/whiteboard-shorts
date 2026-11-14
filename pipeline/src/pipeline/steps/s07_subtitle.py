@@ -141,6 +141,8 @@ def _fits_two_lines(text: str, line_chars: int) -> bool:
     """한 줄에 들어가거나, 두 줄 모두 한 줄 폭 안에 드는 띄어쓰기가 있는지"""
     if len(text) <= line_chars:
         return True
+    if " " not in text:  # 띄어쓰기가 없으면 wrap_two_lines가 글자 수로 나눈다
+        return len(text) <= 2 * line_chars
     return any(len(text[:i].rstrip()) <= line_chars and len(text[i:].strip()) <= line_chars
                for i, ch in enumerate(text) if ch == " ")
 
@@ -170,9 +172,9 @@ def split_cues(text: str, max_chars: int = MAX_CUE_CHARS, allow_long_comma: bool
             cut = min(commas, key=lambda i: abs(i - mid))
         else:
             cut = _best_cut(sent, max_part=max_chars, balance=6.0)  # 화면 단위는 줄보다 뜻을 더 본다
-            if cut is None:  # 띄어쓰기가 없는 긴 낱말은 글자 수로 자른다
-                cut = max_chars
-        queue[:0] = [sent[:cut].strip(), sent[cut:].strip()]
+            if cut is None:  # 띄어쓰기가 없는 긴 낱말은 글자 수로 자른다 (두 조각 모두 비지 않게)
+                cut = min(max_chars, len(sent) - 1)
+        queue[:0] = [p for p in (sent[:cut].strip(), sent[cut:].strip()) if p]
     return cues
 
 
