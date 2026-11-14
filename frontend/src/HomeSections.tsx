@@ -61,29 +61,21 @@ export function FAQ() {
 
 function TeamPortrait({ longHair, glasses, variant }: { longHair: boolean; glasses: boolean; variant: number }) {
   return <svg className="team-portrait" viewBox="0 0 160 170" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
-    <ellipse cx="80" cy="79" rx="66" ry="65" strokeOpacity=".14" strokeDasharray="3 8" />
-    <path d="m19 40 2-9 3 9 8 2-8 2-3 8-2-8-8-2ZM137 96l2-7 2 7 6 2-6 2-2 7-2-7-6-2Z" strokeWidth="1.6" strokeOpacity=".6" />
-    {longHair ? <path d="M42 122C25 113 32 96 31 77 25 20 56 13 80 16c41-4 54 25 49 61-3 22 8 37-10 49-16 7-59 7-77-4Z" fill="currentColor" fillOpacity=".07" />
-      : <path d="M40 76c-14-35 8-57 29-54l11-8 8 7c26-3 43 20 32 57" fill="currentColor" fillOpacity=".07" />}
-    <path d="m66 108-1 16-22 10q-13 6-16 24m66-50 2 16 22 10q14 6 17 24" fill="#fffaf0" />
-    <path d="M43 65c-7-8-12-1-8 10l7 5m75-15c7-8 12-1 8 10l-7 5" fill="#fffaf0" />
-    <path d="M43 56q-3 28 5 43c7 12 20 18 32 18s25-6 32-18q8-15 5-43c-19-29-54-27-74 0Z" fill="#fffaf0" />
-    {longHair ? variant === 2 ? <>
-      <path d="M40 61q0-34 39-36 40 0 42 36L99 49l-2 11-17-12-5 12-15-10-4 11-16 3M39 82q-10 20 5 36m77-36q12 20-4 36" fill="#fffaf0" />
-    </> : variant === 4 ? <>
-      <path d="M40 64q-5-33 28-39 39-10 53 30-17 3-29-15-17 22-52 24ZM34 90q9 9 0 22m91-25q-10 13 0 27" fill="#fffaf0" />
+    {longHair ? <>
+      <path d="M36 125V64c0-27 16-40 44-40s44 13 44 40v61" />
+      <path d="M48 63v20c0 20 13 32 32 32s32-12 32-32V63" />
+      <path d={variant === 2 ? "M48 63q8-19 16-20l2 16 13-15 9 16 7-14 17 17" : variant === 4 ? "M48 63q27-2 42-24 3 19 22 24" : "M48 63q20-4 32-24 12 20 32 24"} />
     </> : <>
-      <path d="M40 63q-1-38 39-38 40 1 42 38-27-2-41-25-12 24-40 25ZM35 89q9 12-1 25m91-25q-9 12 1 25" fill="#fffaf0" />
-    </> : <path d={variant === 1 ? "M40 62q-1-25 23-32l-5 14 23-18-2 13 20-7q20 8 22 30l-20-10-8 10-15-11-12 9-12-7Z" : "M40 62q-1-29 38-33 35-1 43 33l-25-8-3 9-20-13-6 11-12-8Z"} fill="#fffaf0" />}
-    {glasses ? <><rect x="49" y="68" width="25" height="20" rx="8" /><rect x="86" y="68" width="25" height="20" rx="8" /><path d="M74 76q6-5 12 0m-43-4 6 2m62 0 6-2" /><path d="M61 77h1m37 0h1" strokeWidth="4" /></>
-      : <><path d="M60 76h1m38 0h1" strokeWidth="4.5" /><path d="m55 67 9-1m32 0 9 1" strokeWidth="1.6" /></>}
-    <path d="m79 80-2 9 5 1m-13 8q11 11 22-1" />
-    <path d="M50 89h8m44 0h8" strokeOpacity=".25" strokeWidth="3.5" />
-    <path d="m64 124 16 13 16-13m-52 24-3 10m75-10 3 10" />
-    <path d="M31 158q48 3 98 0" strokeOpacity=".6" />
+      <path d="M45 64c-1-24 13-37 35-37s36 13 35 37l-2 21c-2 18-14 30-33 30S49 103 47 85Z" />
+      <path d={variant === 1 ? "M45 64q14-2 24-18l9 13 12-13q10 16 25 18" : "M45 64q20 0 30-19 12 18 40 19"} />
+    </>}
+    {glasses ? <>
+      <rect x="52" y="69" width="23" height="18" rx="7" /><rect x="85" y="69" width="23" height="18" rx="7" /><path d="M75 76h10" />
+      <path d="M63 77h1m32 0h1" strokeWidth="4" />
+    </> : <path d="M62 77h1m34 0h1" strokeWidth="4" />}
+    <path d="M70 96q10 9 20 0M68 114v12m24-12v12M32 152q3-24 36-26m24 0q33 2 36 26" />
   </svg>;
 }
-
 export function Team() {
   const members = [
     ["이지아", "통합 · 이식", "각자의 결과물을 하나의 흐름으로"],
