@@ -23,6 +23,17 @@ def _path(key: str, default: str) -> Path:
     return p if p.is_absolute() else (ROOT / p).resolve()
 
 
+def _float(key: str, default: float) -> float:
+    """.env의 숫자 값. 없거나 비어 있으면 default"""
+    raw = os.getenv(key, "").strip()
+    if not raw:
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        raise ValueError(f".env의 {key} 값이 숫자가 아닙니다: {raw!r}") from None
+
+
 @dataclass(frozen=True)
 class Settings:
     # OpenAI
@@ -40,6 +51,26 @@ class Settings:
     # ElevenLabs 1,000자당 가격(USD). 요금제마다 달라서 직접 넣는다. 비우면 비용 '미확인'
     elevenlabs_usd_per_1k_chars: Optional[float] = (
         float(os.getenv("ELEVENLABS_USD_PER_1K_CHARS")) if os.getenv("ELEVENLABS_USD_PER_1K_CHARS") else None)
+    # voice_settings (0~1). 비우면 기본값. 범위는 TTS 호출 직전에 검사한다 (tts/elevenlabs.py)
+    elevenlabs_stability: float = field(default_factory=lambda: _float("ELEVENLABS_STABILITY", 0.5))
+    elevenlabs_similarity: float = field(default_factory=lambda: _float("ELEVENLABS_SIMILARITY", 0.75))
+    # 1이면 ElevenLabs 원본 mp3와 원본 기준 글자 시각(.align.json)을 지우지 않는다 (숨소리 자르기 기준 실험용)
+    keep_raw_tts: bool = os.getenv("KEEP_RAW_TTS", "0") == "1"
+    # 장면 음성 앞뒤 무음 자르기 (utils/ffmpeg.py의 to_wav). 비우면 기본값
+    silence_db: float = field(default_factory=lambda: _float("SILENCE_DB", -45.0))  # 앞: 이보다 작으면 무음
+    tail_silence_db: float = field(default_factory=lambda: _float("TAIL_SILENCE_DB", -33.0))  # 끝: 숨소리까지 무음으로
+    tail_sec: float = field(default_factory=lambda: _float("TAIL_SEC", 0.25))  # 장면 끝에 붙이는 무음
+    keep_sec: float = field(default_factory=lambda: _float("KEEP_SEC", 0.02))  # 소리가 끝난 뒤 남기는 여유
+    fade_sec: float = field(default_factory=lambda: _float("FADE_SEC", 0.04))  # 끝 페이드아웃
+    # 글자별 시각이 있을 때: 마지막 글자 끝 + 여유까지는 자르지 않고, + 최대 허용을 넘는 소리(끝 잡음)는 잘라낸다
+    tail_guard_sec: float = field(default_factory=lambda: _float("TAIL_GUARD_SEC", 0.08))
+    tail_max_sec: float = field(default_factory=lambda: _float("TAIL_MAX_SEC", 0.30))
+    # 장면 음성 소리 크기 맞추기 (LUFS). off면 끄기. 최대값(PEAK_DB, dBFS)을 넘는 부분만 짧게 눌러 막는다
+    target_lufs: Optional[float] = field(default_factory=lambda: None if os.getenv("TARGET_LUFS", "").strip().lower() == "off"
+                                         else _float("TARGET_LUFS", -14.0))
+    peak_db: float = field(default_factory=lambda: _float("PEAK_DB", -1.0))
+    # 자막을 실제 말보다 먼저 띄우는 시간(초). 기본 0 (첫 자막은 항상 장면 시작)
+    subtitle_lead_sec: float = field(default_factory=lambda: _float("SUBTITLE_LEAD_SEC", 0.0))
 
     # 경로
     jobs_dir: Path = field(default_factory=lambda: _path("JOBS_DIR", "./jobs"))

@@ -20,7 +20,12 @@
   image_text_scenes    그림 설명에 글자를 부르는 표현이 남은 장면 수 (format_violations에 포함된 항목)
   fact_issues          원문과 다른 수치·조건으로 남은 오류 수 (수치 검증 도입 전 job은 빈칸)
   subtitle_timed       글자별 발화 시각으로 자막을 맞춘 장면 수 / 전체
-  subtitle_drift_max   자막이 넘어가는 시점과 가장 가까운 실제 단어 시작의 차이 중 최댓값(초)
+  subtitle_drift_max   자막이 넘어가는 시점과 가장 가까운 실제 단어 시작의 차이 중 최댓값(초).
+                       아무 단어나 가장 가까운 것과 비교해서 실제 오차보다 작게 나올 수 있다 (예전 지표, 비교용)
+  subtitle_cue_err_max 자막이 넘어가는 시점과 그 자막이 실제로 시작하는 말(같은 위치의 단어)의 차이 중 최댓값(초).
+                       SUBTITLE_LEAD_SEC로 일부러 먼저 띄운 만큼은 빼고 계산한다 (log.json의 s07 기록 기준)
+  subtitle_cue_err_mean 위 차이의 부호 있는 평균(초). +면 자막이 늦게, -면 일찍 넘어가는 경향
+                       (글자 시각 기준이라 v4 Turbo는 0.04초 안쪽 차이는 측정 오차 수준)
   subtitle_in_video    모든 자막이 장면 길이 안에서 끝나는지
   gen_sec              마지막 실행의 처리 시간(초)
   cost_usd             이 job에 쓴 API 비용 누적(달러). 단가를 모르는 단계는 빠진 값
@@ -36,12 +41,13 @@ from pathlib import Path
 from pipeline.config import settings
 from pipeline.schema import Analysis, Project, ScriptDraft
 from pipeline.steps.s03_script import IMAGE_TEXT, _total_range, _violations
-from pipeline.steps.s07_subtitle import split_cues
+from pipeline.steps.s07_subtitle import speech_index, split_cues
 from pipeline.utils.ffmpeg import probe_duration
 
 COLUMNS = ["job_id", "title", "runs", "scenes", "narration_chars", "voice_sec", "video_sec", "length_ok",
            "av_diff_sec", "points_covered", "format_violations", "image_text_scenes", "fact_issues",
-           "subtitle_timed", "subtitle_drift_max", "subtitle_in_video", "gen_sec", "cost_usd", "cost_unpriced"]
+           "subtitle_timed", "subtitle_drift_max", "subtitle_cue_err_max", "subtitle_cue_err_mean",
+           "subtitle_in_video", "gen_sec", "cost_usd", "cost_unpriced"]
 
 _SRT_TIME = re.compile(r"(\d+):(\d+):(\d+),(\d+) --> (\d+):(\d+):(\d+),(\d+)")
 
@@ -108,7 +114,9 @@ def job_metrics(job_dir: Path) -> dict:
 
     violations, image_text, points = _script_checks(job_dir, project)
 
-    timed, drifts, in_video = 0, [], True
+    s07 = [s for s in steps if s.get("step") == "s07_subtitle" and s.get("status") == "done"]
+    lead = float(s07[-1].get("subtitle_lead_sec", 0) or 0) if s07 else 0.0
+    timed, drifts, cue_errs, in_video = 0, [], [], True
     for s in project.scenes:
         cues = _srt_times(job_dir / s.subtitle) if s.subtitle else []
         if cues and s.duration and cues[-1][1] > s.duration + 0.05:
@@ -117,9 +125,19 @@ def job_metrics(job_dir: Path) -> dict:
             continue
         timed += 1
         words = _word_starts(s.speech_text, s.char_times)
-        n_cues = len(split_cues(s.subtitle_text or s.narration))
-        for start, _ in cues[1:n_cues]:  # 첫 자막은 장면 시작(0초)에 고정이라 제외
+        text = s.subtitle_text or s.narration
+        cue_texts = split_cues(text)
+        pos = 0
+        for i, cue in enumerate(cue_texts):
+            k = text.find(cue, pos)
+            pos = k + len(cue)
+            if i == 0 or i >= len(cues) or k < 0:  # 첫 자막은 장면 시작(0초)에 고정이라 제외
+                continue
+            start = cues[i][0]
             drifts.append(min(abs(start - w) for w in words))
+            j = speech_index(text, k, s.speech_text)
+            if j is not None and j < len(s.char_times):
+                cue_errs.append(start + lead - s.char_times[j][0])
 
     cost = log.get("cost") or {}
     return {
@@ -138,6 +156,8 @@ def job_metrics(job_dir: Path) -> dict:
         "fact_issues": _fact_issues(steps),
         "subtitle_timed": f"{timed}/{len(project.scenes)}",
         "subtitle_drift_max": round(max(drifts), 3) if drifts else "",
+        "subtitle_cue_err_max": round(max(abs(e) for e in cue_errs), 3) if cue_errs else "",
+        "subtitle_cue_err_mean": round(sum(cue_errs) / len(cue_errs), 3) if cue_errs else "",
         "subtitle_in_video": in_video,
         "gen_sec": log.get("total_seconds", ""),
         "cost_usd": cost.get("total_usd", ""),

@@ -131,6 +131,24 @@ def _time_at(anchors: list[tuple[int, float]], pos: int) -> float:
     return anchors[-1][1]
 
 
+def speech_index(text: str, k: int, speech_text: str) -> Optional[int]:
+    """자막 문장 text[:k]를 발음으로 바꿔(to_speech), 읽는 문장 speech_text에서 그다음 말이 시작되는 글자 위치.
+    공백 차이는 무시한다. 바꾼 앞부분이 읽는 문장과 다르면 None
+    (자막은 '20.1%'·'Bow-tie'처럼 원래 표기라 글자 수 비율로는 위치가 어긋난다)"""
+    from ..utils.pronounce import to_speech  # import 줄은 팀원 브랜치와 겹치지 않게 함수 안에서
+    prefix = re.sub(r"\s+", "", to_speech(text[:k]))
+    n = 0
+    for i, ch in enumerate(speech_text):
+        if ch.isspace():
+            continue
+        if n == len(prefix):
+            return i
+        if ch != prefix[n]:
+            return None
+        n += 1
+    return None
+
+
 def _cue_starts_from_speech(text: str, cues: list[str], speech_text: Optional[str],
                             char_times: Optional[list[list[float]]]) -> Optional[list[float]]:
     """각 자막 큐가 시작되는 시각. 글자별 시각이 없거나 맞지 않으면 None (→ 글자 수 비율 방식)"""
@@ -144,7 +162,15 @@ def _cue_starts_from_speech(text: str, cues: list[str], speech_text: Optional[st
         positions.append(k)
         pos = k + len(cue)
     anchors = _time_anchors(text, speech_text, char_times)
-    return [_time_at(anchors, k) for k in positions]
+    # 큐 앞부분을 발음으로 바꿔 읽는 문장 속 정확한 글자 위치를 찾고 그 글자의 시작 시각을 쓴다.
+    # 못 찾으면 예전처럼 쉼표·마침표 기준점 사이를 글자 수 비율로 나눈다
+    starts, last = [], 0.0
+    for k in positions:
+        i = speech_index(text, k, speech_text) if k > 0 else 0
+        t = char_times[i][0] if i is not None and i < len(char_times) else _time_at(anchors, k)
+        last = max(last, t)
+        starts.append(last)
+    return starts
 
 
 def build_srt(narration: str, duration: float, speech_text: Optional[str] = None,
@@ -155,12 +181,17 @@ def build_srt(narration: str, duration: float, speech_text: Optional[str] = None
     cues = split_cues(narration)
     starts = _cue_starts_from_speech(narration, cues, speech_text, char_times)
     if starts is None:
-        speech = max(duration - END_PAD, 0.5)
+        # 말소리 구간 = 장면 길이 - 앞 무음 - 끝 무음(+여유). s05가 실제로 붙인 길이를 쓴다
+        # (END_PAD 정의 줄은 팀원 브랜치와 겹쳐서 남겨 둠. 병합 뒤 삭제)
+        from ..utils.ffmpeg import KEEP_SEC, LEAD_SEC, TAIL_SEC
+        speech = max(duration - LEAD_SEC - TAIL_SEC - KEEP_SEC, 0.5)
         weights = [max(len(c.replace(" ", "")), 1) for c in cues]
-        total, t, starts = sum(weights), 0.0, []
+        total, t, starts = sum(weights), LEAD_SEC, []
         for w in weights:
             starts.append(t)
             t += speech * w / total
+    lead = _lead_sec()  # 자막을 말보다 먼저 띄우는 시간 (SUBTITLE_LEAD_SEC, 기본 0)
+    starts = [max(s - lead, 0.0) for s in starts]
     starts[0] = 0.0
     lines = []
     for i, cue in enumerate(cues):
@@ -220,7 +251,13 @@ def run(job_dir: Path, only: list[int] | None = None) -> dict:
         if drift > 0.1:
             log.warning(f"[s07] scene {s.id}: 영상 길이가 음성과 {drift:.2f}초 다릅니다")
     log.info(f"[s07] 완료: 자막 {len(targets)}개, 변환 영상 새로 생성 {created}개")
-    return {"subtitles": len(targets), "converted": created}
+    return {"subtitles": len(targets), "converted": created, "subtitle_lead_sec": _lead_sec()}
+
+
+def _lead_sec() -> float:
+    """SUBTITLE_LEAD_SEC (.env). log.json의 s07 기록에 남겨 eval_jobs가 지표를 계산할 때 뺀다"""
+    from ..config import settings  # import 줄은 팀원 브랜치와 겹치지 않게 함수 안에서
+    return settings.subtitle_lead_sec
 
 
 if __name__ == "__main__":
