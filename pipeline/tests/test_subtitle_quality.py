@@ -69,3 +69,11 @@ def test_violations_report_focus():
     bad = ScriptDraft(scenes=[SceneDraft(visual_focus="웹툰 작가", **scene)])
     assert not [e for e in _violations(ok, 1, (0, 999)) if "visual_focus" in e]
     assert [e for e in _violations(bad, 1, (0, 999)) if "visual_focus" in e]
+
+
+def test_long_word_without_spaces_terminates():
+    # 띄어쓰기 없는 낱말이 한 줄보다 길어도 멈추지 않고 두 줄 안으로 나뉜다 (예전에는 같은 조각을 끝없이 다시 나눔)
+    for size in (7, 12, 19):
+        cues = split_cues("가나다라마바사아자차카타파하가나다라마바사.", max_cue_chars(size), line_chars=size)
+        assert "".join(cues) == "가나다라마바사아자차카타파하가나다라마바사."
+        assert all(len(line) <= size for cue in cues for line in wrap_two_lines(cue, size).split("\n"))
