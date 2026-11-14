@@ -116,4 +116,18 @@ class Settings:
     # 최종 렌더 (Remotion)
     remotion_browser: str = os.getenv("REMOTION_BROWSER", "")  # 비워 두면 Remotion 기본 Chrome 사용
 
+    # 자막 스타일 (Remotion으로 그대로 전달). 크기를 바꾸면 s07 줄바꿈 글자 수도 자동으로 맞춰진다
+    subtitle_font: str = os.getenv(
+        "SUBTITLE_FONT", "'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif"
+    )
+    subtitle_size: int = int(os.getenv("SUBTITLE_SIZE", "56"))  # px (1080 기준)
+    subtitle_weight: int = int(os.getenv("SUBTITLE_WEIGHT", "800"))
+    subtitle_color: str = os.getenv("SUBTITLE_COLOR", "#111111")
+
+    # 상단 제목 (project.title = 분석 단계에서 LLM이 만든 20자 이내 제목)
+    title_show: bool = os.getenv("TITLE_SHOW", "1") != "0"
+    title_font: str = os.getenv("TITLE_FONT", "")  # 비우면 자막 폰트와 같게
+    title_size: int = int(os.getenv("TITLE_SIZE", "80"))  # 긴 제목은 자동으로 줄어든다
+    title_color: str = os.getenv("TITLE_COLOR", "#111111")
+
 settings = Settings()

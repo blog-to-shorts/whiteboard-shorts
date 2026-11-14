@@ -15,8 +15,11 @@ from pathlib import Path
 from typing import Optional
 
 from pipeline import run as pipeline_run
+from pipeline import style as job_style
 from pipeline.config import settings
 from pipeline.schema import Project
+from pipeline.steps import s07_subtitle, s08_render
+from pipeline.utils.logger import JobLogger
 
 _queue: "queue.Queue[tuple[str, dict]]" = queue.Queue()
 _lock = threading.Lock()
@@ -43,7 +46,16 @@ def _worker() -> None:
             _waiting.remove(job_id)
             _running = job_id
         try:
-            if src.get("rerun"):
+            if src.get("style"):
+                job_dir = jobs_dir() / job_id
+                jl = JobLogger(job_dir)
+                jl.data.pop("stopped_after", None)
+                with jl.step("s07_subtitle") as entry:
+                    entry.update(s07_subtitle.run(job_dir))
+                with jl.step("s08_render") as entry:
+                    entry.update(s08_render.run(job_dir))
+                    jl.data["output"] = entry["output"]
+            elif src.get("rerun"):
                 # 사람이 고친 대본은 길이가 범위를 벗어나도 다시 쓰지 않는다
                 pipeline_run.run(job_id=job_id, regen_script=False)
             else:
@@ -132,6 +144,25 @@ def rerun(job_id: str, edits: list[dict]) -> None:
     _queue.put((job_id, {"rerun": True}))
 
 
+def set_style(job_id: str, style: dict) -> None:
+    """자막·제목 모양을 jobs/<id>/style.json에 저장하고 자막(s07)·합성(s08)만 다시 한다.
+    기존 음성·그림·드로잉을 재사용한다."""
+    job_dir = jobs_dir() / job_id
+    if not (job_dir / "scenes.json").exists():
+        raise LookupError("대본이 없는 작업입니다")
+    with _lock:
+        if job_id in _waiting or job_id == _running:
+            raise RuntimeError("이미 실행 중이거나 대기 중인 작업입니다")
+        project = Project.load(job_dir / "scenes.json")
+        if not project.scenes or any(not s.video or not (job_dir / s.video).is_file() for s in project.scenes):
+            raise ValueError("드로잉 영상이 준비된 작업에서 스타일을 바꿀 수 있습니다")
+        job_style.save(job_dir, style)
+        pipeline_run.invalidate(job_dir, 8)
+        _errors.pop(job_id, None)
+        _waiting.append(job_id)
+    _queue.put((job_id, {"style": True}))
+
+
 def _read_json(path: Path) -> dict:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -192,6 +223,7 @@ def job_info(job_id: str) -> Optional[dict]:
         "video_url": f"/jobs/{job_id}/video?v={int(output.stat().st_mtime)}" if status == "done" else None,
         "error": error,
         "queue_position": position,
+        "style": job_style.load(job_dir),
     }
 
 

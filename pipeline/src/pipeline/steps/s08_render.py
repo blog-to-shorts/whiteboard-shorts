@@ -7,14 +7,16 @@
 import base64
 import json
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
+from .. import style as job_style
 from ..config import settings
 from ..schema import Project, Scene
 from ..utils.ffmpeg import probe_duration
 from ..utils.logger import log
-from .s07_subtitle import HEIGHT, IMAGE_HEIGHT, IMAGE_TOP, WIDTH, final_video_path
+from .s07_subtitle import CONVERTED_ARTWORK_HEIGHT, CONVERTED_ARTWORK_TOP, HEIGHT, WIDTH, final_video_path
 
 COMPOSITION_ID = "WhiteboardVideo"
 OUTPUT_NAME = "output.mp4"
@@ -123,7 +125,7 @@ def _artwork_bounds(video: Path, duration: float) -> dict:
                 "left": max(0, left * 4 - 8), "top": max(0, top * 4 - 8),
                 "right": min(WIDTH, right * 4 + 8), "bottom": min(HEIGHT, bottom * 4 + 8),
             }
-    return {"left": 0, "top": IMAGE_TOP, "right": WIDTH, "bottom": IMAGE_TOP + IMAGE_HEIGHT}
+    return {"left": 0, "top": CONVERTED_ARTWORK_TOP, "right": WIDTH, "bottom": CONVERTED_ARTWORK_TOP + CONVERTED_ARTWORK_HEIGHT}
 
 
 def build_props(job_dir: Path) -> dict:
@@ -150,7 +152,13 @@ def build_props(job_dir: Path) -> dict:
         if highlight:
             scene_props["numericHighlight"] = highlight
         scenes.append(scene_props)
-    props = {"title": project.title, "fps": project.fps, "scenes": scenes}
+    saved_style = job_style.load(job_dir)
+    props = {
+        "title": project.title if saved_style["title_show"] else "",
+        "fps": project.fps,
+        "scenes": scenes,
+        "style": job_style.remotion_style(saved_style),
+    }
     logo = settings.remotion_dir / "public" / "brand" / "smartdongschool-logo.png"
     if logo.is_file():
         encoded = base64.b64encode(logo.read_bytes()).decode("ascii")
@@ -169,7 +177,8 @@ def run(job_dir: Path, force: bool = False) -> dict:
     props_path.write_text(json.dumps(build_props(job_dir), ensure_ascii=False, indent=2), encoding="utf-8")
 
     cmd = [
-        "npx", "remotion", "render", "src/index.ts", COMPOSITION_ID, str(out),
+        # Windows에서는 npx가 npx.cmd라서 셸 없이 부르면 찾지 못한다 → 실제 경로로 바꿔 부른다
+        shutil.which("npx") or "npx", "remotion", "render", "src/index.ts", COMPOSITION_ID, str(out),
         f"--props={props_path}",
         f"--public-dir={job_dir}",
         "--codec=h264",

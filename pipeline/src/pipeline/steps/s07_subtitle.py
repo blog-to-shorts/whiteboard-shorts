@@ -11,21 +11,24 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from ..config import settings
+from .. import style as job_style
 from ..schema import Project, Scene
 from ..utils.ffmpeg import probe_duration, run as ffmpeg
 from ..utils.logger import log
 from typing import Optional
 
 WIDTH, HEIGHT = 1080, 1920
-IMAGE_HEIGHT = 1540      # 그림 높이(px). 1920 중 아래쪽 약 270px를 자막 자리로 남긴다
-IMAGE_TOP = 110          # 그림 위쪽 여백(px)
+# 기존 작업과 호환되는 중간 영상의 크기. 최종 그림 배치는 Remotion에서 정한다.
+CONVERTED_ARTWORK_HEIGHT = 1540
+CONVERTED_ARTWORK_TOP = 110
 MAX_CUE_CHARS = 30       # 자막 한 번에 보여줄 최대 글자 수 (세로 화면 2줄 분량)
-END_PAD = 0.3            # s05에서 음성 끝에 붙인 무음 길이 → 자막 계산에서 제외
-LINE_CHARS = 19          # 자막 한 줄에 들어가는 글자 수 (1080px 폭, 글씨 크기 56, 띄어쓰기 포함)
+# 안전 영역 안에서 자막 글자 크기에 맞춰 한 줄 길이를 계산한다.
+LINE_CHARS = job_style.line_chars(settings.subtitle_size)  # job마다 웹에서 고른 크기가 있으면 run()에서 다시 계산
 
 
 # ---------- 자막 ----------
-def split_cues(text: str, max_chars: int = MAX_CUE_CHARS) -> list[str]:
+def split_cues(text: str, max_chars: int = MAX_CUE_CHARS, allow_long_comma: bool = True) -> list[str]:
     """문장 단위로 나누고, 긴 문장은 의미가 끊기지 않는 지점에서 둘로 나눈다.
     1순위: 쉼표 바로 뒤 (가운데에 가장 가까운 쉼표)
     2순위: 가운데에 가장 가까운 띄어쓰기
@@ -36,7 +39,7 @@ def split_cues(text: str, max_chars: int = MAX_CUE_CHARS) -> list[str]:
     while queue:
         sent = queue.pop(0)
         # 쉼표로 끝나는 조각(구 단위)은 조금 길어도 그대로 둔다 → 구 중간에서 끊기는 것 방지
-        limit = max_chars + (6 if sent.endswith(",") else 0)
+        limit = max_chars + (6 if allow_long_comma and sent.endswith(",") else 0)
         if len(sent) <= limit:
             cues.append(sent)
             continue
@@ -44,10 +47,7 @@ def split_cues(text: str, max_chars: int = MAX_CUE_CHARS) -> list[str]:
         commas = [i + 1 for i, ch in enumerate(sent) if ch == "," and 4 <= i < len(sent) - 4]
         spaces = [i for i, ch in enumerate(sent) if ch == " "]
         candidates = commas or spaces
-        if not candidates:
-            cues.append(sent)
-            continue
-        cut = min(candidates, key=lambda i: abs(i - mid))
+        cut = min(candidates, key=lambda i: abs(i - mid)) if candidates else max_chars
         queue[:0] = [sent[:cut].strip(), sent[cut:].strip()]
     return cues
 
@@ -62,8 +62,11 @@ def wrap_two_lines(cue: str, line_chars: int = LINE_CHARS) -> str:
         return cue
     mid = len(cue) / 2
     spaces = [i for i, ch in enumerate(cue) if ch == " "]
-    if not spaces:
-        return cue
+    fitting = [i for i in spaces if i <= line_chars and len(cue) - i - 1 <= line_chars]
+    if not fitting:
+        cut = min(line_chars, len(cue) // 2)
+        return cue[:cut].rstrip() + "\n" + cue[cut:].lstrip()
+    spaces = fitting
 
     after_comma = [i for i in spaces if cue[i - 1] == "," and abs(i - mid) <= len(cue) * 0.3]
     if after_comma:
@@ -173,16 +176,21 @@ def _cue_starts_from_speech(text: str, cues: list[str], speech_text: Optional[st
     return starts
 
 
+def split_render_cues(text: str, line_chars: int) -> list[str]:
+    return split_cues(text, min(MAX_CUE_CHARS, line_chars * 2), allow_long_comma=False)
+
+
 def build_srt(narration: str, duration: float, speech_text: Optional[str] = None,
-              char_times: Optional[list[list[float]]] = None) -> str:
+              char_times: Optional[list[list[float]]] = None, line_chars: int = LINE_CHARS) -> str:
     """자막 큐마다 표시 시간을 정해 SRT 문자열 생성.
     글자별 발화 시각이 있으면 실제 말에 맞추고, 없으면 글자 수 비율(공백 제외)로 나눈다.
     첫 자막은 장면 시작부터, 마지막 자막은 장면 끝까지 유지해 자막이 비는 순간이 없게 한다."""
-    cues = split_cues(narration)
+    cues = split_render_cues(narration, line_chars)
+    if not cues:
+        return ""
     starts = _cue_starts_from_speech(narration, cues, speech_text, char_times)
     if starts is None:
         # 말소리 구간 = 장면 길이 - 앞 무음 - 끝 무음(+여유). s05가 실제로 붙인 길이를 쓴다
-        # (END_PAD 정의 줄은 팀원 브랜치와 겹쳐서 남겨 둠. 병합 뒤 삭제)
         from ..utils.ffmpeg import KEEP_SEC, LEAD_SEC, TAIL_SEC
         speech = max(duration - LEAD_SEC - TAIL_SEC - KEEP_SEC, 0.5)
         weights = [max(len(c.replace(" ", "")), 1) for c in cues]
@@ -197,7 +205,7 @@ def build_srt(narration: str, duration: float, speech_text: Optional[str] = None
     for i, cue in enumerate(cues):
         start = min(starts[i], duration)
         end = duration if i == len(cues) - 1 else min(max(starts[i + 1], start), duration)
-        lines.append(f"{i + 1}\n{_ts(start)} --> {_ts(end)}\n{wrap_two_lines(cue)}\n")
+        lines.append(f"{i + 1}\n{_ts(start)} --> {_ts(end)}\n{wrap_two_lines(cue, line_chars)}\n")
     return "\n".join(lines)
 
 
@@ -215,8 +223,8 @@ def _convert(job_dir: Path, scene: Scene) -> bool:
     if not src.exists():
         raise FileNotFoundError(f"scene {scene.id}: {src.name}이(가) 없습니다. s06을 먼저 실행하세요.")
     vf = (
-        f"scale=-2:{IMAGE_HEIGHT}:flags=lanczos,"
-        f"pad={WIDTH}:{HEIGHT}:(ow-iw)/2:{IMAGE_TOP}:white,"
+        f"scale=-2:{CONVERTED_ARTWORK_HEIGHT}:flags=lanczos,"
+        f"pad={WIDTH}:{HEIGHT}:(ow-iw)/2:{CONVERTED_ARTWORK_TOP}:white,"
         "fps=30,format=yuv420p"
     )
     ffmpeg(["-i", str(src), "-vf", vf,
@@ -233,13 +241,14 @@ def run(job_dir: Path, only: list[int] | None = None) -> dict:
         for s in targets:
             final_video_path(job_dir, s).unlink(missing_ok=True)
 
-    # 자막은 계산이 가벼우므로 매번 다시 쓴다 (대본 수정 시 바로 반영)
+    # 자막은 계산이 가벼우므로 매번 다시 쓴다 (대본·자막 크기 수정 시 바로 반영)
+    chars = job_style.line_chars(job_style.load(job_dir)["subtitle_size"])
     for s in targets:
         if s.duration is None:
             raise ValueError(f"scene {s.id}: duration이 없습니다. s05를 먼저 실행하세요.")
         srt = job_dir / s.subtitle
         srt.parent.mkdir(parents=True, exist_ok=True)
-        srt.write_text(build_srt(s.subtitle_text or s.narration, s.duration, s.speech_text, s.char_times),
+        srt.write_text(build_srt(s.subtitle_text or s.narration, s.duration, s.speech_text, s.char_times, chars),
                        encoding="utf-8")
 
     with ThreadPoolExecutor(max_workers=2) as ex:
@@ -251,7 +260,7 @@ def run(job_dir: Path, only: list[int] | None = None) -> dict:
         if drift > 0.1:
             log.warning(f"[s07] scene {s.id}: 영상 길이가 음성과 {drift:.2f}초 다릅니다")
     log.info(f"[s07] 완료: 자막 {len(targets)}개, 변환 영상 새로 생성 {created}개")
-    return {"subtitles": len(targets), "converted": created, "subtitle_lead_sec": _lead_sec()}
+    return {"subtitles": len(targets), "converted": created, "subtitle_lead_sec": _lead_sec(), "line_chars": chars}
 
 
 def _lead_sec() -> float:

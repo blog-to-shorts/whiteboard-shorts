@@ -301,3 +301,59 @@ html{scroll-padding-top:110px}
 .about-grid{margin-top:38px;gap:32px}.about-cols{font-size:19px}
 }
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.mini-dot{animation:none}}
+
+/* subtitle style panel */
+.style-panel{max-width:900px}
+.style-panel h3{font-size:26px;margin:0 0 16px;display:flex;align-items:center}
+.style-grid{display:grid;grid-template-columns:1fr auto;gap:32px;align-items:start;border-top:1px solid var(--line);padding-top:18px}
+.style-controls{display:flex;flex-direction:column;gap:16px}
+.style-controls label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.style-controls label b{color:var(--ink)}
+.style-controls label.check{flex-direction:row;align-items:center;gap:8px;color:var(--ink)}
+.style-controls select{font:inherit;font-size:15px;padding:8px 10px;border:0;border-bottom:2px solid var(--ink);background:rgba(255,255,255,.5);color:var(--ink)}
+.style-controls input[type=range]{accent-color:var(--accent);width:100%}
+.style-preview{position:relative;background:#fff;box-shadow:0 12px 30px rgba(0,0,0,.2);overflow:hidden;flex:none}
+.sp-safe{position:absolute;outline:1px dashed var(--accent)}
+.sp-logo{position:absolute;top:0}
+.sp-title{position:absolute;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;text-align:center;font-weight:900;color:#111;word-break:keep-all;overflow-wrap:anywhere;text-wrap:balance;letter-spacing:-.02em}
+.sp-image{position:absolute;left:50%;transform:translateX(-50%);border:1px dashed #b5b8bb;display:grid;place-items:center;color:#9a9da1;font-size:12px}
+.sp-sub{position:absolute;left:0;right:0;text-align:center;font-weight:800;line-height:1.35;color:#111;white-space:pre-line;word-break:keep-all;overflow-wrap:anywhere}
+.sp-ui{position:absolute;left:0;right:0;bottom:0;background:repeating-linear-gradient(45deg,rgba(249,102,6,.08) 0 6px,transparent 6px 12px);border-top:1px dashed var(--accent);color:var(--accent);font-size:10px;display:grid;place-items:center}
+@media (max-width:700px){.style-grid{grid-template-columns:1fr}.style-preview{justify-self:center}}
+.style-controls .field{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
+.color-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.swatch{width:26px;height:26px;border:2px solid transparent;border-radius:50%;padding:0;outline:1px solid rgba(0,0,0,.2)}
+.swatch.on{border-color:#fff;outline:2px solid var(--ink)}
+.color-row input[type=color]{width:34px;height:28px;padding:0;border:1px solid var(--ink);background:none;cursor:pointer}
+.color-row code{font-size:12px;color:var(--ink)}
+.range-row{display:flex;align-items:center;gap:8px}
+.range-row small{font-size:12px;color:var(--muted);white-space:nowrap}
+.range-row input[type=range]{flex:1}
+.link-btn{background:none;border:0;padding:0 0 0 8px;font-size:12px;color:var(--accent);text-decoration:underline}
+.sp-sub{cursor:ns-resize;touch-action:none;user-select:none;z-index:2}
+.sp-sub:hover{outline:1px dashed var(--accent);outline-offset:2px}
+
+/* office-style color palette */
+.cp{position:relative;display:inline-block}
+.cp-trigger{display:inline-flex;align-items:center;gap:8px;background:rgba(255,255,255,.6);border:1px solid var(--ink);padding:5px 10px}
+.cp-current{width:22px;height:22px;border:1px solid rgba(0,0,0,.3)}
+.cp-trigger code{font-size:13px;color:var(--ink)}
+.cp-caret{font-size:11px}
+.cp-pop{position:absolute;z-index:40;top:calc(100% + 6px);left:0;background:#fff;border:1px solid #c8c8c8;box-shadow:0 10px 28px rgba(0,0,0,.18);padding:12px 14px;width:max-content}
+.cp-title{margin:0 0 8px;font-size:14px;font-weight:700;color:#222}
+.cp-row{display:grid;grid-template-columns:repeat(10,22px);gap:6px;margin-bottom:12px}
+.cp-shades{display:grid;grid-template-columns:repeat(10,22px);gap:6px;margin:-4px 0 14px}
+.cp-col{display:flex;flex-direction:column}
+.cp-chip{width:22px;height:22px;padding:0;border:1px solid rgba(0,0,0,.12);cursor:pointer}
+.cp-col .cp-chip{border-top-width:0}
+.cp-col .cp-chip:first-child{border-top-width:1px}
+.cp-chip:hover{outline:2px solid #f0a030;outline-offset:0;position:relative;z-index:1}
+.cp-chip.on{outline:2px solid #d24726;outline-offset:1px;position:relative;z-index:2}
+.cp-more{display:flex;align-items:center;gap:8px;border-top:1px solid #e3e3e3;padding-top:10px;font-size:13px;color:#222;cursor:pointer}
+.cp-more input{width:26px;height:22px;padding:0;border:1px solid #bbb;background:none;cursor:pointer}
+.style-controls .cp-more{flex-direction:row;color:#222;font-size:13px}
+
+/* New Short 옆에 Subtitle Style을 나란히 (좁은 화면에서는 아래로) */
+.create-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.3fr);gap:4vw;align-items:start}
+.style-target{margin:-14px 0 14px;font-size:14px}
+@media (max-width:1200px){.create-split{grid-template-columns:1fr}.create-split .style-panel{margin-top:6vh}}

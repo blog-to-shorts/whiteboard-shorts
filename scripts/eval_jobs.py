@@ -41,7 +41,7 @@ from pathlib import Path
 from pipeline.config import settings
 from pipeline.schema import Analysis, Project, ScriptDraft
 from pipeline.steps.s03_script import IMAGE_TEXT, _total_range, _violations
-from pipeline.steps.s07_subtitle import speech_index, split_cues
+from pipeline.steps.s07_subtitle import speech_index, split_cues, split_render_cues
 from pipeline.utils.ffmpeg import probe_duration
 
 COLUMNS = ["job_id", "title", "runs", "scenes", "narration_chars", "voice_sec", "video_sec", "length_ok",
@@ -115,7 +115,9 @@ def job_metrics(job_dir: Path) -> dict:
     violations, image_text, points = _script_checks(job_dir, project)
 
     s07 = [s for s in steps if s.get("step") == "s07_subtitle" and s.get("status") == "done"]
-    lead = float(s07[-1].get("subtitle_lead_sec", 0) or 0) if s07 else 0.0
+    last_subtitles = s07[-1] if s07 else {}
+    lead = float(last_subtitles.get("subtitle_lead_sec") or 0)
+    line_chars = last_subtitles.get("line_chars")
     timed, drifts, cue_errs, in_video = 0, [], [], True
     for s in project.scenes:
         cues = _srt_times(job_dir / s.subtitle) if s.subtitle else []
@@ -126,7 +128,7 @@ def job_metrics(job_dir: Path) -> dict:
         timed += 1
         words = _word_starts(s.speech_text, s.char_times)
         text = s.subtitle_text or s.narration
-        cue_texts = split_cues(text)
+        cue_texts = split_render_cues(text, line_chars) if line_chars else split_cues(text)
         pos = 0
         for i, cue in enumerate(cue_texts):
             k = text.find(cue, pos)

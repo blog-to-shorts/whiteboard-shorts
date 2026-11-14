@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { StylePanel } from "./StylePanel";
 import { api, Job, JobStatus, Scene, STEP_LABELS, STEP_ORDER } from "./api";
 import { FAQ, HowItWorks, SiteFooter, SiteHeader, SketchIcon, Team } from "./HomeSections";
 
@@ -132,13 +133,18 @@ export default function App() {
 
         {error && <div className="banner" onClick={() => setError(null)}>{error}</div>}
 
-        {/* ---------- 새 영상 ---------- */}
+        {/* ---------- 새 영상 + 자막 스타일 (선택한 영상) ---------- */}
         <section className="block create-block" id="create">
-          <div className="block-head">
-            <span className="sq" />
-            <h2>이제, 나의 글로 만들어볼까요?<sup>{"{01}"}</sup></h2>
+          <div className="create-split">
+            <div>
+              <div className="block-head">
+                <span className="sq" />
+                <h2>이제, 나의 글로 만들어볼까요?<sup>{"{01}"}</sup></h2>
+              </div>
+              <CreateForm onCreated={onCreated} onError={setError} />
+            </div>
+            {selected && <StylePanel job={selected} onApplied={onRerun} />}
           </div>
-          <CreateForm onCreated={onCreated} onError={setError} />
         </section>
 
         {/* ---------- 작업: 가운데 세로 영상 + 양옆 라벨 ---------- */}
