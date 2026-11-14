@@ -5,7 +5,7 @@ import { FAQ, HowItWorks, SiteFooter, SiteHeader, SketchIcon, Team } from "./Hom
 // ---------- 서비스 이름과 소개 문구 ----------
 const BRAND = {
   role: "뚝딱쇼츠",
-  tagline: "당신의 블로그를 숏폼으로 그려드립니다.",
+  tagline: "당신의 블로그를 쇼츠로 그려드립니다.",
 };
 
 const STATUS_LABEL: Record<JobStatus, string> = {
@@ -106,7 +106,7 @@ export default function App() {
             <h1 className="wordmark">{BRAND.role}</h1>
             <p className="hero-description">
               블로그 글 하나로 대본부터 그림, 내레이션, 자막까지.
-              <br />화이트보드 숏폼을 만들어보세요.
+              <br />화이트보드 쇼츠를 만들어보세요.
             </p>
             <a className="cta hero-start" href="#create">내 블로그로 시작하기 <span aria-hidden>↗</span></a>
             <p className="hero-handnote">링크 하나면, 이야기가 움직여요 <span aria-hidden>⤴</span></p>
@@ -115,14 +115,14 @@ export default function App() {
             <p className="hero-preview-label"><span className="sq" aria-hidden />서비스 소개</p>
             <div className="hero-media" aria-label="뚝딱쇼츠 서비스 소개 영상 영역">
               <video
-                src="/media/ttukttak-intro.mp4"
-                poster="/media/ttukttak-intro-poster.jpg"
+                src="/media/ttukttak-intro.mp4?v=shorts"
+                poster="/media/ttukttak-intro-poster.jpg?v=shorts"
                 autoPlay
                 muted
                 loop
                 playsInline
                 preload="auto"
-                aria-label="블로그 링크를 드로잉 숏폼으로 바꿔주는 뚝딱쇼츠 서비스 소개"
+                aria-label="블로그 링크를 드로잉 쇼츠로 바꿔주는 뚝딱쇼츠 서비스 소개"
               />
             </div>
           </div>
