@@ -77,7 +77,6 @@ export default function App() {
     };
   }, [selectedId, reloadKey]);
 
-  const latestDone = jobs.find((j) => j.status === "done") ?? null;
   const running = jobs.find((j) => j.status === "running") ?? null;
   const doneCount = jobs.filter((j) => j.status === "done").length;
 
@@ -109,15 +108,10 @@ export default function App() {
             <a className="cta hero-start" href="#create">내 블로그로 시작하기 <span aria-hidden>↗</span></a>
           </div>
           <div className="hero-preview">
-            <p className="hero-preview-label"><span className="sq" aria-hidden />SHORTS PREVIEW</p>
-          <div className="hero-media">
-            {latestDone && api.videoUrl(latestDone) ? (
-                <video src={api.videoUrl(latestDone)!} autoPlay muted loop playsInline />
-            ) : (
-                <div className="hero-media-empty">첫 영상을 만들면 여기서 재생돼요</div>
-            )}
-          </div>
-            {latestDone && <p className="media-tag">{latestDone.title}</p>}
+            <p className="hero-preview-label"><span className="sq" aria-hidden />서비스 소개</p>
+            <div className="hero-media" aria-label="뚝딱쇼츠 서비스 소개 영상 영역">
+              <div className="hero-media-empty">서비스 소개 영상 준비 중</div>
+            </div>
           </div>
         </section>
 
@@ -137,14 +131,14 @@ export default function App() {
           <div className="corner-label"><span className="sq" /> {`{01—${pad(jobs.length)}}`}</div>
           <div className="stage">
             <div className="stage-side left">
-              <h2><span className="sq" />Selected Job<sup>{selected ? `{${selected.job_id.slice(-2)}}` : "{—}"}</sup></h2>
+              <h2><span className="sq" />선택한 내 쇼츠<sup>{selected ? `{${selected.job_id.slice(-2)}}` : "{—}"}</sup></h2>
               {selected && <JobMeta job={selected} />}
             </div>
             <div className="stage-center">
               <Player job={selected} />
             </div>
             <div className="stage-side right">
-              <h2>All Jobs<sup>{`{${pad(jobs.length)}}`}</sup></h2>
+              <h2>내가 만든 쇼츠<sup>{`{${pad(jobs.length)}}`}</sup></h2>
               <JobList jobs={jobs} selectedId={selectedId} onSelect={setSelectedId} />
             </div>
           </div>
