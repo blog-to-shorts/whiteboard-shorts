@@ -116,14 +116,14 @@ export default function App() {
             <p className="hero-preview-label"><span className="sq" aria-hidden />서비스 소개</p>
             <div className="hero-media" aria-label="뚝딱쇼츠 서비스 소개 영상 영역">
               <video
-                src="/media/ttukttak-intro.mp4?v=shorts"
-                poster="/media/ttukttak-intro-poster.jpg?v=shorts"
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="auto"
-                aria-label="블로그 링크를 드로잉 쇼츠로 바꿔주는 뚝딱쇼츠 서비스 소개"
+                  src="/media/ttukttak-intro.mp4?v=shorts"
+                  poster="/media/ttukttak-intro-poster.jpg?v=shorts"
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                  preload="auto"
+                  aria-label="블로그 링크를 드로잉 쇼츠로 바꿔주는 뚝딱쇼츠 서비스 소개"
               />
             </div>
           </div>
@@ -141,7 +141,7 @@ export default function App() {
                 <span className="sq" />
                 <h2>이제, 나의 글로 만들어볼까요?<sup>{"{01}"}</sup></h2>
               </div>
-              <CreateForm onCreated={onCreated} onError={setError} />
+              <CreateForm onCreated={onCreated} />
             </div>
             {selected && <StylePanel job={selected} onApplied={onRerun} />}
           </div>
@@ -207,10 +207,11 @@ export default function App() {
   );
 }
 
-function CreateForm({ onCreated, onError }: { onCreated: (ids: string[]) => void; onError: (m: string) => void }) {
+function CreateForm({ onCreated }: { onCreated: (ids: string[]) => void }) {
   const [mode, setMode] = useState<"url" | "text">("url");
   const [value, setValue] = useState("");
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null); // 입력 칸 바로 아래에 보여 줄 오류 (예: 블로그 홈 주소)
 
   const urls = useMemo(
       () => value.split(/\n+/).map((s) => s.trim()).filter((s) => /^https?:\/\//.test(s)),
@@ -220,12 +221,13 @@ function CreateForm({ onCreated, onError }: { onCreated: (ids: string[]) => void
 
   const submit = async () => {
     setBusy(true);
+    setErr(null);
     try {
       const r = mode === "url" ? await api.create(urls) : await api.createFromText(value.trim());
       setValue("");
       onCreated(r.job_ids);
     } catch (e) {
-      onError((e as Error).message);
+      setErr((e as Error).message);
     } finally {
       setBusy(false);
     }
@@ -234,12 +236,12 @@ function CreateForm({ onCreated, onError }: { onCreated: (ids: string[]) => void
   return (
       <div className="create">
         <div className="tabs">
-          <button className={mode === "url" ? "on" : ""} onClick={() => setMode("url")}>Blog URL,</button>
-          <button className={mode === "text" ? "on" : ""} onClick={() => setMode("text")}>원문 직접 입력</button>
+          <button className={mode === "url" ? "on" : ""} onClick={() => { setMode("url"); setErr(null); }}>Blog URL,</button>
+          <button className={mode === "text" ? "on" : ""} onClick={() => { setMode("text"); setErr(null); }}>원문 직접 입력</button>
         </div>
         <textarea
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => { setValue(e.target.value); setErr(null); }}
             placeholder={
               mode === "url"
                   ? "https://blog.naver.com/…\n여러 줄로 넣으면 순서대로 일괄 생성돼요"
@@ -257,6 +259,7 @@ function CreateForm({ onCreated, onError }: { onCreated: (ids: string[]) => void
             {busy ? "요청 중…" : mode === "url" && urls.length > 1 ? `${urls.length}개 생성 →` : "영상 생성 →"}
           </button>
         </div>
+        {err && <p className="error-box" role="alert">{err}</p>}
       </div>
   );
 }
