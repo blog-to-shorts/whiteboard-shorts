@@ -107,7 +107,11 @@ def _one(job_dir: Path, scene: Scene, style: str, reference: Path | None = None)
                 usage["image_text_retries"] += 1
                 log.warning(f"[s04] scene {scene.id:02d} 그림 속 문자 감지 → 이미지 재생성")
                 prompt += " Replace all written markings with blank surfaces or simple geometric symbols."
-        raise RuntimeError(f"scene {scene.id:02d}: 재생성한 이미지에도 글자·숫자·워터마크가 감지됐습니다.")
+        # 재생성해도 글자가 남으면 영상 전체를 멈추지 않고 마지막 그림으로 진행한다
+        candidate.replace(out)
+        usage["image_text_unresolved"] = 1
+        log.warning(f"[s04] scene {scene.id:02d} 재생성한 그림에도 문자 감지 → 경고만 남기고 이 그림으로 진행")
+        return usage
 
 
 def run(job_dir: Path, only: list[int] | None = None) -> dict:

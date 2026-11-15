@@ -16,7 +16,7 @@ TEXT_PRICES: dict[str, tuple[float, float]] = {
 
 # 이미지 모델: 텍스트 입력 / 참조 이미지 입력 / 이미지 출력 1M 토큰당 USD
 IMAGE_PRICES: dict[str, tuple[float, float, float]] = {
-    "gpt-image-2": (2.50, 4.00, 15.00),
+    "gpt-image-2": (5.00, 8.00, 30.00),
 }
 
 

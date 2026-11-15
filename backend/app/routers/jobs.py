@@ -1,4 +1,6 @@
 """작업 생성/조회 API."""
+from urllib.parse import parse_qs, urlparse
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
@@ -7,7 +9,22 @@ from pipeline import style as job_style
 from ..models import FontInfo, JobCreate, JobInfo, JobsCreated, JobStyle, RerunRequest
 from ..services import job_runner
 
+
 router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+def _naver_home_error(url: str) -> str | None:
+    """네이버 블로그 주소인데 게시글 번호가 없으면 안내 문구, 정상이면 None.
+    홈 주소로 만들면 사용자가 원한 글이 아닐 수 있고 생성 비용이 낭비되므로 작업을 받기 전에 막는다."""
+    u = urlparse(url)
+    if not u.netloc.endswith("blog.naver.com"):
+        return None
+    if parse_qs(u.query).get("logNo", [""])[0].isdigit():
+        return None
+    parts = [p for p in u.path.split("/") if p]
+    if parts and parts[-1].isdigit():
+        return None
+    return "블로그 홈 주소예요. 영상으로 만들 게시글을 열고, 그 글의 주소를 입력해 주세요."
 
 
 @router.post("", response_model=JobsCreated, status_code=202)
@@ -16,6 +33,10 @@ def create_jobs(body: JobCreate):
     sources = body.sources()
     if not sources:
         raise HTTPException(400, "처리할 URL이나 텍스트가 없습니다")
+    for s in sources:
+        err = _naver_home_error(s.get("url", ""))
+        if err:
+            raise HTTPException(400, err)
     return {"job_ids": job_runner.submit(sources)}
 
 
@@ -50,7 +71,6 @@ def get_video(job_id: str, download: bool = False):
         path, media_type="video/mp4",
         filename=f"{job_id}.mp4" if download else None,
     )
-
 
 
 @router.post("/{job_id}/rerun", response_model=JobInfo, status_code=202)
