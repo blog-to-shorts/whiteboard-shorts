@@ -1,18 +1,28 @@
+"""API 호출 재시도 (지수 백오프). 마지막 실패는 그대로 예외를 올린다."""
+import functools
 import time
-from functools import wraps
+
+from .logger import log
 
 
-def retry(times: int = 3, delay: float = 2.0):
-    """API 오류 시 제한적 재시도."""
+class NoRetryError(RuntimeError):
+    """다시 시도해도 결과가 같은 오류(인증·권한·요금제 등). 즉시 중단한다."""
+
+
+def retry(times: int = 3, base_delay: float = 2.0):
     def deco(fn):
-        @wraps(fn)
+        @functools.wraps(fn)
         def wrapper(*args, **kwargs):
-            for i in range(times):
+            for attempt in range(1, times + 1):
                 try:
                     return fn(*args, **kwargs)
-                except Exception:
-                    if i == times - 1:
+                except NoRetryError:
+                    raise
+                except Exception as e:  # noqa: BLE001
+                    if attempt == times:
                         raise
-                    time.sleep(delay * (i + 1))
+                    wait = base_delay * 2 ** (attempt - 1)
+                    log.warning(f"{fn.__name__} 실패({attempt}/{times}): {e} → {wait:.0f}초 후 재시도")
+                    time.sleep(wait)
         return wrapper
     return deco
