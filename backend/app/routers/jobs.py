@@ -7,6 +7,7 @@ from pipeline import style as job_style
 from ..models import FontInfo, JobCreate, JobInfo, JobsCreated, JobStyle, RerunRequest
 from ..services import job_runner
 
+
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
