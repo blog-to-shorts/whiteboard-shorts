@@ -70,7 +70,7 @@ def test_ratio_fallback_uses_actual_silence():
     assert abs(got - (ff.LEAD_SEC + speech * 5 / 10)) < 0.002  # 첫 큐 '가나다라.' 5글자 / 전체 10글자
 
 
-@pytest.mark.parametrize("size,expected", [(36, 18), (56, 12), (96, 7)])
+@pytest.mark.parametrize("size,expected", [(36, 14), (56, 9), (96, 5)])
 def test_subtitle_size_wraps_inside_safe_width(size, expected):
     text = "띄어쓰기 없는 긴 단어도 확인합니다. 가나다라마바사아자차카타파하가나다라마바사."
     chars = s07.job_style.line_chars(size)

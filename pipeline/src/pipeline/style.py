@@ -110,8 +110,8 @@ for _key, _label, _family, _group, _generic, _url in NOONNU:
 
 SUBTITLE_SIZE_RANGE = (36, 96)
 TITLE_SIZE_RANGE = (48, 140)
-# remotion/src/layout.ts의 안전 영역, 텍스트 패딩과 같은 값이다.
-SUBTITLE_TEXT_WIDTH = 680
+# remotion/src/layout.ts의 가로 안전 여백(252px)과 텍스트 패딩(20px)을 양쪽에서 뺀다.
+SUBTITLE_TEXT_WIDTH = 1080 - 2 * (252 + 20)
 SUBTITLE_BOTTOM_RANGE = (696, 796)
 
 
