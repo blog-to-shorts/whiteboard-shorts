@@ -1,13 +1,14 @@
 export const VIDEO_WIDTH = 1080;
 export const VIDEO_HEIGHT = 1920;
-export const safeInsets = { top: 280, right: 252, bottom: 680, left: 108 };
+const SIDE_INSET = 252;
+export const safeInsets = { top: 280, right: SIDE_INSET, bottom: 680, left: SIDE_INSET };
 export const SAFE_WIDTH = VIDEO_WIDTH - safeInsets.left - safeInsets.right;
 export const SAFE_HEIGHT = VIDEO_HEIGHT - safeInsets.top - safeInsets.bottom;
 export const TEXT_PADDING = 20;
 export const TEXT_WIDTH = SAFE_WIDTH - TEXT_PADDING * 2;
 export const LOGO_HEIGHT = 104;
 export const LOGO_WIDTH = 200;
-export const LOGO_LEFT = 8;
+export const LOGO_LEFT = (SAFE_WIDTH - LOGO_WIDTH) / 2;
 export const TITLE_LINE_HEIGHT = 1.2;
 export const SUBTITLE_LINE_HEIGHT = 1.35;
 export const DEFAULT_SUBTITLE_BOTTOM = safeInsets.bottom + 16;

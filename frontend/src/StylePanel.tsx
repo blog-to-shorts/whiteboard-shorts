@@ -3,7 +3,7 @@ import { api, FontInfo, Job, JobStyle } from "./api";
 import { ColorPalette } from "./ColorPalette";
 import logo from "../../remotion/public/brand/smartdongschool-logo.png?url";
 import {
-  DEFAULT_SUBTITLE_BOTTOM, LOGO_LEFT, LOGO_WIDTH, MAX_SUBTITLE_BOTTOM, SAFE_HEIGHT,
+  DEFAULT_SUBTITLE_BOTTOM, LOGO_LEFT, LOGO_WIDTH, MAX_SUBTITLE_BOTTOM, SAFE_HEIGHT, SAFE_WIDTH,
   safeInsets, subtitleLayout, subtitleLineChars as lineChars, TEXT_PADDING,
   TITLE_LINE_HEIGHT, titleLayout, VIDEO_HEIGHT as H, VIDEO_WIDTH as W,
 } from "../../remotion/src/layout";
@@ -225,7 +225,8 @@ export function StylePanel({ job, onApplied }: { job: Job; onApplied: () => void
                 lineHeight: TITLE_LINE_HEIGHT, WebkitLineClamp: heading.lines,
               }}>{title}</div>}
               <div className="sp-image" style={{
-                top: artworkTop * SCALE, height: artworkHeight * SCALE, width: artworkHeight * 2 / 3 * SCALE,
+                top: artworkTop * SCALE, height: artworkHeight * SCALE,
+                width: Math.min(SAFE_WIDTH, artworkHeight * 2 / 3) * SCALE,
               }}>그림 배치 영역</div>
               <div className="sp-sub"
                 onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}
