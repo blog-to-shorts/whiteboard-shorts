@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+jobs/
+**/node_modules
+**/.venv
+**/__pycache__
+frontend/
+docs/
+scripts/
+vendor/
+remotion/out/
+remotion/public/jobs/
