@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://RAILWAY_DOMAIN/:path*" }
+    { "source": "/api/:path*", "destination": "https://whiteboard-shorts-production.up.railway.app/:path*" }
   ]
 }
