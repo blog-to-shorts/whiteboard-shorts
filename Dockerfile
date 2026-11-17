@@ -45,4 +45,5 @@ ENV PATH="/app/pipeline/.venv/bin:${PATH}" \
     WHITEBOARD_ANIMATOR_DIR=/app/vendor/whiteboard-animator
 
 EXPOSE 8000
-CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# 컨테이너 안에서 서버 전체 CPU(48개)가 보이면 ffmpeg·Remotion이 스레드를 과하게 띄워 메모리가 터지므로 사용할 CPU를 묶는다
+CMD ["sh", "-c", "exec taskset -c 0-$((${CPU_THREADS:-4}-1)) uvicorn backend.app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
